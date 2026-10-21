@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import {
   CUSTOM_ASSETS,
   STEPS,
-  BALLOON_X,
   SKY_STATIONS,
-  TARGET_SKY_ALTITUDE
+  TARGET_SKY_ALTITUDE,
+  MR_SKY_END_X
 } from './config.js';
 import {
   scene,
@@ -43,7 +43,7 @@ if (CUSTOM_ASSETS.skyBgTextureUrl) {
 }
 
 // ============================================================================
-// 2. CUSTOM ENVIRONMENT & FLAT-TOP ROCK STEP DETECTOR
+// 2. CUSTOM ENVIRONMENT & MANUAL STONE LANDING BOXES
 // ============================================================================
 export const environmentGroup = new THREE.Group();
 scene.add(environmentGroup);
@@ -56,103 +56,33 @@ loadCustomGLB(CUSTOM_ASSETS.environmentModelUrl, environmentGroup, {
 export const rocksGroup = new THREE.Group();
 scene.add(rocksGroup);
 
-function stitchAdjacentRockSteps() {
-  for (let i = 1; i < STEPS.length - 1; i++) {
-    const current = STEPS[i];
-    const next = STEPS[i + 1];
-    if (next.topY > 0 && current.maxX < next.minX) {
-      const midX = (current.maxX + next.minX) * 0.5;
-      current.maxX = midX;
-      next.minX = midX;
-    }
-  }
-  const lastRockStep = STEPS[STEPS.length - 2];
-  lastRockStep.maxX = Math.max(lastRockStep.maxX, BALLOON_X);
-  STEPS[0].maxX = STEPS[1].minX;
-  STEPS[STEPS.length - 1].minX = lastRockStep.maxX;
+// Draw the manual stone landing boxes defined in config.js
+rebuildLandingAreaVisuals(STEPS);
 
-  rebuildLandingAreaVisuals(STEPS);
-}
-
-// Automatically extracts 4 clean, flat-topped step colliders from rocks.glb
-// (Works whether rocks.glb is 4 separate meshes or 1 combined mesh)
-function buildFlatStepsFromRocksModel(model) {
-  model.updateMatrixWorld(true);
-  const fullBox = new THREE.Box3().setFromObject(model);
-  if (fullBox.isEmpty()) return;
-
-  const meshes = [];
-  model.traverse((child) => {
-    if (child.isMesh && child.geometry && child.geometry.attributes.position) {
-      const b = new THREE.Box3().setFromObject(child);
-      if (b.max.y > 0.15) {
-        meshes.push({ mesh: child, box: b, centerX: (b.min.x + b.max.x) * 0.5 });
-      }
-    }
-  });
-
-  // Case A: 4 separate rock meshes inside rocks.glb
-  if (meshes.length >= 4) {
-    meshes.sort((a, b) => a.centerX - b.centerX);
-    for (let i = 0; i < 4; i++) {
-      const m = meshes[i];
-      STEPS[i + 1].minX = m.box.min.x;
-      STEPS[i + 1].maxX = m.box.max.x;
-      // Slightly inset from peak spike so feet stand flush on the stone surface
-      STEPS[i + 1].topY = m.box.max.y * 0.94;
-    }
-  } else {
-    // Case B: All rocks joined into a single mesh — slice total X span into 4 steps
-    const totalMinX = fullBox.min.x;
-    const totalMaxX = fullBox.max.x;
-    const sliceWidth = (totalMaxX - totalMinX) / 4;
-    const tempVec = new THREE.Vector3();
-
-    for (let i = 0; i < 4; i++) {
-      const sMinX = totalMinX + i * sliceWidth;
-      const sMaxX = sMinX + sliceWidth;
-      let maxSliceY = 0;
-
-      meshes.forEach(({ mesh }) => {
-        const pos = mesh.geometry.attributes.position;
-        for (let v = 0; v < pos.count; v++) {
-          tempVec.fromBufferAttribute(pos, v).applyMatrix4(mesh.matrixWorld);
-          if (tempVec.x >= sMinX && tempVec.x <= sMaxX && tempVec.y > maxSliceY) {
-            maxSliceY = tempVec.y;
-          }
-        }
-      });
-
-      STEPS[i + 1].minX = sMinX;
-      STEPS[i + 1].maxX = sMaxX;
-      if (maxSliceY > 0.15) {
-        STEPS[i + 1].topY = maxSliceY * 0.94;
-      }
-    }
-  }
-
-  // Ensure each step strictly ascends so step walls behave predictably
-  for (let i = 2; i <= 4; i++) {
-    if (STEPS[i].topY <= STEPS[i - 1].topY + 0.2) {
-      STEPS[i].topY = STEPS[i - 1].topY + 0.55;
-    }
-  }
-
-  stitchAdjacentRockSteps();
-}
-
-stitchAdjacentRockSteps();
-
+// Load rocks.glb purely visually — does NOT overwrite your manual STEPS!
 loadCustomGLB(CUSTOM_ASSETS.combinedRocksModelUrl, rocksGroup, {
   scale: CUSTOM_ASSETS.combinedRocksScale,
-  position: CUSTOM_ASSETS.combinedRocksPosition,
-  onLoaded: (gltf, model) => {
-    buildFlatStepsFromRocksModel(model);
-  }
+  position: CUSTOM_ASSETS.combinedRocksPosition
 });
 
 // ============================================================================
-// 3. PURE 2D WHITE CLOUDS IN 5 DIFFERENT SHAPES
+// 3. STAGE 4 END CLOUD PERCH (WHERE GIRL STANDS WHEN MR. SKY LEAVES)
+// ============================================================================
+export const endCloudPerch = new THREE.Group();
+endCloudPerch.position.set(MR_SKY_END_X + 2.6, TARGET_SKY_ALTITUDE + 0.15, 0);
+scene.add(endCloudPerch);
+
+const perchMat = new THREE.MeshLambertMaterial({ color: '#f4f7fb' });
+const pCenter = new THREE.Mesh(new THREE.SphereGeometry(1.15, 48, 48), perchMat);
+pCenter.scale.set(1.25, 0.72, 0.95);
+const pLeft = new THREE.Mesh(new THREE.SphereGeometry(0.82, 48, 48), perchMat);
+pLeft.position.set(-0.95, -0.1, 0);
+const pRight = new THREE.Mesh(new THREE.SphereGeometry(0.82, 48, 48), perchMat);
+pRight.position.set(0.95, -0.1, 0);
+endCloudPerch.add(pCenter, pLeft, pRight);
+
+// ============================================================================
+// 4. PURE 2D WHITE CLOUDS IN 5 DIFFERENT SHAPES
 // ============================================================================
 function create2DCloudVariant(shapeIndex) {
   const canvas = document.createElement('canvas');
@@ -230,7 +160,7 @@ const clouds2D = [];
 });
 
 // ============================================================================
-// 4. CLEAN PLACEHOLDER FRAMES FOR THE SKY ILLUSTRATIONS
+// 5. CLEAN PLACEHOLDER FRAMES FOR THE SKY ILLUSTRATIONS
 // ============================================================================
 function createPlaceholderTexture(label) {
   const canvas = document.createElement('canvas');

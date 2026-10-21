@@ -17,7 +17,7 @@ import {
   loadingManager,
   mouseParallax
 } from './scene.js';
-import { updateWorld } from './world.js';
+import { updateWorld, endCloudPerch } from './world.js';
 import {
   playerGroup,
   charVisual,
@@ -27,6 +27,7 @@ import {
   mrSkyGroup,
   mrSkyRig,
   mrCloudMat,
+  mrCloudEyeMat,
   mrCloudColorGray,
   mrCloudColorBlue
 } from './entities.js';
@@ -56,12 +57,23 @@ setTimeout(() => {
 }, 3000);
 
 // ============================================================================
-// 2. UI HELPERS
+// 2. UI, HUD CONTROLS & GLOBAL NAVIGATION ELEMENTS
 // ============================================================================
 const thoughtEl = document.getElementById('thought-text');
-const whisperEl = document.getElementById('whisper-hint');
 const dialogueBox = document.getElementById('dialogue-box');
 const dialogueText = document.getElementById('dialogue-text');
+
+const controlsHud = document.getElementById('controls-hud');
+const btnLeft = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+const btnSpace = document.getElementById('btn-space');
+const spaceLabel = document.getElementById('space-label');
+
+const navButtons = document.querySelectorAll('.nav-step');
+const questionOverlay = document.getElementById('question-overlay');
+const questionForm = document.getElementById('question-form');
+const violetInput = document.getElementById('violet-input');
+const violetFeedback = document.getElementById('violet-feedback');
 
 let currentThought = '';
 function setThought(text) {
@@ -71,11 +83,43 @@ function setThought(text) {
   setTimeout(() => {
     thoughtEl.textContent = text;
     if (text) thoughtEl.classList.remove('fade-out');
-  }, 280);
+  }, 250);
+}
+
+// Updates which transparent control buttons are shown & highlights active Top Nav pill
+function updateHUDForStage(stageNum, mode) {
+  navButtons.forEach((btn) => {
+    btn.classList.toggle('active', Number(btn.dataset.stage) === stageNum);
+  });
+
+  if (mode === 'WALK_JUMP') {
+    // Stage 1: Show A/Left, SPACE, and D/Right
+    controlsHud.classList.remove('hidden');
+    btnLeft.classList.remove('ctrl-hidden');
+    btnRight.classList.remove('ctrl-hidden');
+    btnSpace.classList.remove('ctrl-hidden');
+    spaceLabel.textContent = 'SPACE · JUMP';
+  } else if (mode === 'BALLOON_ONLY_SPACE') {
+    // Stage 2: Show ONLY SPACE button to lift balloon
+    controlsHud.classList.remove('hidden');
+    btnLeft.classList.add('ctrl-hidden');
+    btnRight.classList.add('ctrl-hidden');
+    btnSpace.classList.remove('ctrl-hidden');
+    spaceLabel.textContent = 'HOLD SPACE · LIFT';
+  } else if (mode === 'CLOUD_ONLY_AD') {
+    // Stage 3: Show ONLY A and D buttons during Mr. Sky walkthrough
+    controlsHud.classList.remove('hidden');
+    btnLeft.classList.remove('ctrl-hidden');
+    btnRight.classList.remove('ctrl-hidden');
+    btnSpace.classList.add('ctrl-hidden');
+  } else if (mode === 'END_QUESTION') {
+    // Stage 4: Hide movement HUD while answering the question
+    controlsHud.classList.add('hidden');
+  }
 }
 
 // ============================================================================
-// 3. GAME STATE & PHYSICS VARIABLES (A & D ONLY)
+// 3. GAME STATE & PHYSICS VARIABLES
 // ============================================================================
 const keys = { KeyA: false, KeyD: false, Space: false };
 let gameState = 'PLATFORMING';
@@ -103,9 +147,6 @@ let dialogueIndex = 0;
 const camBasePos = new THREE.Vector3(-1.5, 2.7, 14.5);
 const camLookTarget = new THREE.Vector3(-1.5, 2.2, 0);
 
-// ============================================================================
-// 4. CRISP STEP COLLISION HELPERS (REQUIRES SPACEBAR JUMP TO CLIMB)
-// ============================================================================
 function getStepAtX(x) {
   for (const s of STEPS) {
     if (x >= s.minX && x <= s.maxX) return s;
@@ -114,19 +155,130 @@ function getStepAtX(x) {
 }
 
 // ============================================================================
-// 5. DIALOGUE & BIDIRECTIONAL HOPPING (STONES <-> BALLOON <-> MR. CLOUD)
+// 4. GLOBAL NAVIGATION STAGE SWITCHER (STAGES 1, 2, 3, 4)
+// ============================================================================
+function goToStage(stageNumber) {
+  dialogueBox.classList.remove('active');
+  questionOverlay.classList.remove('active');
+
+  // Reset Mr. Sky visibility & opacity in case we are leaving Stage 4
+  mrCloudMat.opacity = 1.0;
+  mrCloudEyeMat.opacity = 1.0;
+  mrSkyGroup.visible = true;
+
+  if (stageNumber === 1) {
+    gameState = 'PLATFORMING';
+    scene.add(playerGroup);
+    playerGroup.position.set(-4.2, 0.0, 0);
+    vel.set(0, 0, 0);
+    charVisual.rotation.y = 0;
+    charVisual.scale.set(1, 1, 1);
+
+    balloonGroup.position.set(BALLOON_X, BALLOON_BASE_Y, 0);
+    balloonVelY = 0;
+    mrSkyGroup.position.set(MR_SKY_START_X, TARGET_SKY_ALTITUDE + 0.15, 0);
+    mrCloudMat.color.copy(mrCloudColorGray);
+
+    setThought(STEP_THOUGHTS[0]);
+    updateHUDForStage(1, 'WALK_JUMP');
+
+  } else if (stageNumber === 2) {
+    gameState = 'BALLOON_FLIGHT';
+    balloonGroup.position.set(BALLOON_X, BALLOON_BASE_Y, 0);
+    balloonVelY = 0;
+    burnerHeat = 0;
+
+    balloonRig.add(playerGroup);
+    playerGroup.position.set(0, 0.22, 0);
+    charVisual.rotation.y = 0;
+    charVisual.scale.set(1, 1, 1);
+    basketSpringVel = -3.5;
+
+    mrSkyGroup.position.set(MR_SKY_START_X, TARGET_SKY_ALTITUDE + 0.15, 0);
+    mrCloudMat.color.copy(mrCloudColorGray);
+
+    setThought("hold space (or the button below) to lift the balloon!");
+    updateHUDForStage(2, 'BALLOON_ONLY_SPACE');
+
+  } else if (stageNumber === 3) {
+    hasMetMrSky = true;
+    gameState = 'CLOUD_RIDE';
+    balloonGroup.position.set(BALLOON_X, TARGET_SKY_ALTITUDE, 0);
+    mrSkyGroup.position.set(MR_SKY_START_X, TARGET_SKY_ALTITUDE + 0.15, 0);
+    cloudVelX = 0;
+
+    mrSkyRig.add(playerGroup);
+    playerGroup.position.set(0, 1.0, 0);
+    charVisual.rotation.y = 0;
+    charVisual.scale.set(1, 1, 1);
+    cloudSpringVel = -3.8;
+
+    setThought("move right with D—watch mr. cloud turn from gray to blue!");
+    updateHUDForStage(3, 'CLOUD_ONLY_AD');
+
+  } else if (stageNumber === 4) {
+    hasMetMrSky = true;
+    gameState = 'END_STAGE';
+    balloonGroup.position.set(BALLOON_X, TARGET_SKY_ALTITUDE, 0);
+
+    // Place Mr. Sky near the end in full blue so we watch him float away
+    mrSkyGroup.position.set(MR_SKY_END_X, TARGET_SKY_ALTITUDE + 0.5, 0);
+    mrCloudMat.color.copy(mrCloudColorBlue);
+
+    // Place the girl safely on the end cloud perch
+    endCloudPerch.add(playerGroup);
+    playerGroup.position.set(0, 0.85, 0);
+    charVisual.rotation.y = 0;
+    charVisual.scale.set(1, 1, 1);
+
+    setThought("bye mr. sky! thanks for the ride...");
+    updateHUDForStage(4, 'END_QUESTION');
+    questionOverlay.classList.add('active');
+  }
+}
+
+navButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const stage = Number(btn.dataset.stage);
+    goToStage(stage);
+  });
+});
+
+// ============================================================================
+// 5. STAGE 4 QUESTION FORM ("Why is the sky not violet?")
+// ============================================================================
+questionForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const userAnswer = violetInput.value.trim();
+  if (!userAnswer) return;
+
+  const lower = userAnswer.toLowerCase();
+  const mentionedEyes = lower.includes('eye') || lower.includes('see') || lower.includes('cone') || lower.includes('human') || lower.includes('vision');
+  const mentionedSun = lower.includes('sun') || lower.includes('less violet') || lower.includes('more blue') || lower.includes('amount');
+
+  let prefix = "I love how you thought about that! ";
+  if (mentionedEyes || mentionedSun) {
+    prefix = "Spot on! You nailed the secret! ";
+  }
+
+  violetFeedback.innerHTML =
+    `<strong>${prefix}</strong><br>` +
+    `Even though violet light scatters slightly more than blue, two things happen: ` +
+    `first, the Sun naturally sends out <em>much more blue light</em> than violet light. ` +
+    `Second, our human eyes have color receptors (cones) that are way more sensitive to blue than violet—so our brains see a soft, bright blue sky!`;
+  violetFeedback.classList.remove('hidden');
+});
+
+// ============================================================================
+// 6. DIALOGUE & HOP TRANSITIONS (STONES <-> BALLOON <-> MR. SKY -> END)
 // ============================================================================
 function startDialogue() {
   if (hasMetMrSky) {
-    gameState = 'READY_TO_HOP_CLOUD';
-    setThought("press space + d to hop onto mr. cloud");
-    whisperEl.textContent = "space + d → hop onto mr. cloud";
-    whisperEl.style.opacity = '0.8';
+    triggerJumpOntoCloud();
     return;
   }
   gameState = 'TALKING';
   setThought('');
-  whisperEl.style.opacity = '0';
   dialogueIndex = 0;
   dialogueText.textContent = MR_SKY_LINES[0];
   dialogueBox.classList.add('active');
@@ -139,10 +291,7 @@ function advanceDialogue() {
   } else {
     hasMetMrSky = true;
     dialogueBox.classList.remove('active');
-    gameState = 'READY_TO_HOP_CLOUD';
-    setThought("let's hop onto mr. cloud!");
-    whisperEl.textContent = "press space + d to jump onto mr. cloud";
-    whisperEl.style.opacity = '0.8';
+    triggerJumpOntoCloud();
   }
 }
 
@@ -156,6 +305,7 @@ function triggerJumpOntoCloud() {
   playerGroup.position.copy(hopStartPos);
   charVisual.rotation.y = 0;
   squashScaleY = 1.25;
+  updateHUDForStage(3, 'CLOUD_ONLY_AD');
 }
 
 function triggerJumpBackToBalloon() {
@@ -168,6 +318,7 @@ function triggerJumpBackToBalloon() {
   playerGroup.position.copy(hopStartPos);
   charVisual.rotation.y = Math.PI;
   squashScaleY = 1.25;
+  updateHUDForStage(2, 'BALLOON_ONLY_SPACE');
 }
 
 function triggerJumpBackToStones() {
@@ -181,8 +332,26 @@ function triggerJumpBackToStones() {
   charVisual.rotation.y = Math.PI;
   squashScaleY = 1.24;
 
-  const topStoneX = (STEPS[4].minX + Math.min(STEPS[4].maxX, BALLOON_X - 0.6)) * 0.5;
+  const topStoneX = (STEPS[4].minX + Math.min(STEPS[4].maxX, BALLOON_X - 0.4)) * 0.5;
   hopTargetPos.set(topStoneX, STEPS[4].topY, 0);
+  updateHUDForStage(1, 'WALK_JUMP');
+}
+
+function triggerHopToEndStage() {
+  if (gameState === 'JUMPING_TO_END' || gameState === 'END_STAGE') return;
+  gameState = 'JUMPING_TO_END';
+  hopProgress = 0;
+  cloudSpringVel = -3.4;
+
+  playerGroup.getWorldPosition(hopStartPos);
+  scene.add(playerGroup);
+  playerGroup.position.copy(hopStartPos);
+  charVisual.rotation.y = 0;
+  squashScaleY = 1.22;
+
+  hopTargetPos.set(endCloudPerch.position.x, endCloudPerch.position.y + 0.85, 0);
+  setThought("bye mr. sky! thanks for showing us the light...");
+  updateHUDForStage(4, 'END_QUESTION');
 }
 
 dialogueBox.addEventListener('click', () => {
@@ -190,67 +359,87 @@ dialogueBox.addEventListener('click', () => {
 });
 
 // ============================================================================
-// 6. KEYBOARD LISTENERS (A, D, SPACE ONLY)
+// 7. KEYBOARD & CLICKABLE ON-SCREEN BUTTON INPUTS
 // ============================================================================
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.KeyA = true;
-  if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.KeyD = true;
+function setKeyState(code, isDown) {
+  if (code === 'KeyA') {
+    keys.KeyA = isDown;
+    btnLeft.classList.toggle('pressed', isDown);
+  } else if (code === 'KeyD') {
+    keys.KeyD = isDown;
+    btnRight.classList.toggle('pressed', isDown);
+  } else if (code === 'Space') {
+    keys.Space = isDown;
+    btnSpace.classList.toggle('pressed', isDown);
+  }
 
+  if (isDown) {
+    if (code === 'Space') {
+      if (gameState === 'PLATFORMING') {
+        jumpBufferTimer = 0.16;
+      } else if (gameState === 'TALKING') {
+        advanceDialogue();
+      }
+    }
+
+    // Bidirectional hop shortcuts (Space + A or Space + D)
+    if (keys.Space && keys.KeyA) {
+      if (gameState === 'BALLOON_FLIGHT' && balloonGroup.position.y <= BALLOON_BASE_Y + 2.8) {
+        triggerJumpBackToStones();
+      } else if (gameState === 'CLOUD_RIDE' && mrSkyGroup.position.x <= MR_SKY_START_X + 2.2) {
+        triggerJumpBackToBalloon();
+      }
+    }
+    if (keys.Space && keys.KeyD && gameState === 'BALLOON_FLIGHT' && balloonGroup.position.y >= TARGET_SKY_ALTITUDE - 2.2) {
+      triggerJumpOntoCloud();
+    }
+  }
+}
+
+// Bind clickable transparent HUD buttons (Mouse + Touch)
+function bindHudButton(buttonEl, keyCode) {
+  const start = (e) => {
+    e.preventDefault();
+    setKeyState(keyCode, true);
+  };
+  const end = (e) => {
+    e.preventDefault();
+    setKeyState(keyCode, false);
+  };
+  buttonEl.addEventListener('mousedown', start);
+  buttonEl.addEventListener('mouseup', end);
+  buttonEl.addEventListener('mouseleave', end);
+  buttonEl.addEventListener('touchstart', start, { passive: false });
+  buttonEl.addEventListener('touchend', end, { passive: false });
+}
+
+bindHudButton(btnLeft, 'KeyA');
+bindHudButton(btnRight, 'KeyD');
+bindHudButton(btnSpace, 'Space');
+
+window.addEventListener('keydown', (e) => {
+  // Let the user type normally when answering the Stage 4 question
+  if (document.activeElement === violetInput) return;
+
+  if (e.code === 'KeyA' || e.code === 'ArrowLeft') setKeyState('KeyA', true);
+  if (e.code === 'KeyD' || e.code === 'ArrowRight') setKeyState('KeyD', true);
   if (e.code === 'Space') {
     e.preventDefault();
-    keys.Space = true;
-
-    if (gameState === 'PLATFORMING') {
-      jumpBufferTimer = 0.16;
-    } else if (gameState === 'TALKING') {
-      advanceDialogue();
-    } else if (gameState === 'BALLOON_FLIGHT' || gameState === 'READY_TO_HOP_CLOUD') {
-      if (keys.KeyA && balloonGroup.position.y <= BALLOON_BASE_Y + 2.8) {
-        triggerJumpBackToStones();
-      } else if (
-        (keys.KeyD || gameState === 'READY_TO_HOP_CLOUD') &&
-        balloonGroup.position.y >= TARGET_SKY_ALTITUDE - 2.2
-      ) {
-        triggerJumpOntoCloud();
-      }
-    } else if (gameState === 'CLOUD_RIDE') {
-      if (keys.KeyA && mrSkyGroup.position.x <= MR_SKY_START_X + 2.2) {
-        triggerJumpBackToBalloon();
-      } else {
-        cloudSpringVel = -3.2;
-        squashScaleY = 1.2;
-      }
-    }
-  }
-
-  if ((e.code === 'KeyA' || e.code === 'ArrowLeft') && keys.Space) {
-    if (
-      (gameState === 'BALLOON_FLIGHT' || gameState === 'READY_TO_HOP_CLOUD') &&
-      balloonGroup.position.y <= BALLOON_BASE_Y + 2.8
-    ) {
-      triggerJumpBackToStones();
-    } else if (gameState === 'CLOUD_RIDE' && mrSkyGroup.position.x <= MR_SKY_START_X + 2.2) {
-      triggerJumpBackToBalloon();
-    }
-  }
-
-  if (
-    (e.code === 'KeyD' || e.code === 'ArrowRight') &&
-    (gameState === 'READY_TO_HOP_CLOUD' ||
-      (gameState === 'BALLOON_FLIGHT' && keys.Space && balloonGroup.position.y >= TARGET_SKY_ALTITUDE - 2.2))
-  ) {
-    triggerJumpOntoCloud();
+    setKeyState('Space', true);
   }
 });
 
 window.addEventListener('keyup', (e) => {
-  if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.KeyA = false;
-  if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.KeyD = false;
-  if (e.code === 'Space') keys.Space = false;
+  if (e.code === 'KeyA' || e.code === 'ArrowLeft') setKeyState('KeyA', false);
+  if (e.code === 'KeyD' || e.code === 'ArrowRight') setKeyState('KeyD', false);
+  if (e.code === 'Space') setKeyState('Space', false);
 });
 
+// Initialize HUD for Stage 1
+updateHUDForStage(1, 'WALK_JUMP');
+
 // ============================================================================
-// 7. MAIN LOOP
+// 8. MAIN ANIMATION LOOP
 // ============================================================================
 const clock = new THREE.Clock();
 
@@ -262,7 +451,7 @@ function animate() {
   if (girlMixer) girlMixer.update(dt);
   updateWorld(elapsed);
 
-  // Balloon & Cloud spring reactions
+  // Spring physics for Balloon & Mr. Cloud
   const bSpringForce = -28.0 * basketSpringY - 6.5 * basketSpringVel;
   basketSpringVel += bSpringForce * dt;
   basketSpringY += basketSpringVel * dt;
@@ -289,7 +478,6 @@ function animate() {
 
     if (jumpBufferTimer > 0) jumpBufferTimer -= dt;
 
-    // 1. JUMP LAUNCH (Spacebar is required to gain height and climb stones!)
     if (jumpBufferTimer > 0 && coyoteTimer > 0) {
       vel.y = 9.2;
       isGrounded = false;
@@ -298,13 +486,11 @@ function animate() {
       squashScaleY = 1.24;
     }
 
-    // 2. VERTICAL MOVEMENT & GRAVITY FIRST
     const prevY = playerGroup.position.y;
     vel.y -= 21.0 * dt;
     playerGroup.position.y += vel.y * dt;
 
-    // 3. HORIZONTAL MOVEMENT WITH STRICT WALL COLLISION
-    // You can NEVER walk onto a higher stone without jumping above its topY first!
+    // Strict horizontal wall check against manual stone boxes in config.js
     const charRadius = 0.22;
     let proposedX = THREE.MathUtils.clamp(playerGroup.position.x + vel.x * dt, -9.5, 6.2);
 
@@ -312,7 +498,6 @@ function animate() {
       const leadingEdgeX = proposedX + (vel.x > 0 ? charRadius : -charRadius);
       const aheadStep = getStepAtX(leadingEdgeX);
 
-      // If the stone ahead is higher than the girl's feet, block horizontal movement like a solid wall!
       if (aheadStep.topY > playerGroup.position.y + 0.08) {
         if (vel.x > 0) {
           proposedX = Math.min(proposedX, aheadStep.minX - charRadius - 0.002);
@@ -326,7 +511,6 @@ function animate() {
     playerGroup.position.x = proposedX;
     playerGroup.position.z = 0;
 
-    // 4. LANDING CHECK (Only lands on a stone if falling onto it from above, or walking across it)
     const underStep = getStepAtX(playerGroup.position.x);
     if (vel.y <= 0 && prevY >= underStep.topY - 0.15 && playerGroup.position.y <= underStep.topY) {
       if (!isGrounded && vel.y < -2.0) squashScaleY = 0.82;
@@ -338,7 +522,6 @@ function animate() {
         setThought(STEP_THOUGHTS[underStep.stepId]);
       }
     } else if (playerGroup.position.y <= 0.0) {
-      // Safety floor at y = 0
       playerGroup.position.y = 0.0;
       vel.y = 0;
       isGrounded = true;
@@ -350,9 +533,9 @@ function animate() {
     const invScale = 1 / Math.sqrt(squashScaleY);
     charVisual.scale.set(invScale, squashScaleY, invScale);
 
-    // 5. BOARD THE HOT AIR BALLOON FROM TOP STONE
+    // Board Hot Air Balloon from Stone 4
     const distToBasket = Math.abs(playerGroup.position.x - balloonGroup.position.x);
-    if (distToBasket < 1.05 && playerGroup.position.y >= STEPS[4].topY - 0.25 && vel.x >= 0) {
+    if (distToBasket < 0.95 && playerGroup.position.y >= STEPS[4].topY - 0.25 && vel.x >= 0) {
       gameState = 'BALLOON_FLIGHT';
       balloonRig.add(playerGroup);
       playerGroup.position.set(0, 0.22, 0);
@@ -360,8 +543,8 @@ function animate() {
       charVisual.scale.set(1, 1, 1);
 
       basketSpringVel = -3.8;
-      setThought("hold space to fly up · or space + a to hop back");
-      whisperEl.textContent = "hold space to rise · space + a to hop back onto stones";
+      setThought("hold space to lift the balloon!");
+      updateHUDForStage(2, 'BALLOON_ONLY_SPACE');
     }
 
     const camTargetX = THREE.MathUtils.clamp(playerGroup.position.x + 1.4, -2.5, 5.0);
@@ -389,17 +572,14 @@ function animate() {
     const targetSway = Math.sin(elapsed * 1.5) * 0.035 * (0.3 + burnerHeat * 0.7);
     balloonRig.rotation.z = THREE.MathUtils.damp(balloonRig.rotation.z, targetSway, 4, dt);
 
-    if (balloonGroup.position.y <= BALLOON_BASE_Y + 2.5) {
-      whisperEl.textContent = "hold space to fly up · space + a to hop back onto stones";
-    } else if (balloonGroup.position.y < TARGET_SKY_ALTITUDE - 2.5) {
+    if (balloonGroup.position.y > 10.0 && balloonGroup.position.y < TARGET_SKY_ALTITUDE - 2.5) {
       setThought("floating up through the quiet air...");
-      whisperEl.textContent = "hold space to rise · release to float down";
     }
 
-    camBasePos.x = THREE.MathUtils.damp(camBasePos.x, 6.8, 3, dt);
+    camBasePos.x = THREE.MathUtils.damp(camBasePos.x, BALLOON_X + 1.5, 3, dt);
     camBasePos.y = THREE.MathUtils.damp(camBasePos.y, balloonGroup.position.y + 2.3, 3.5, dt);
     camBasePos.z = THREE.MathUtils.damp(camBasePos.z, 12.2, 2.5, dt);
-    camLookTarget.set(6.8, balloonGroup.position.y + 1.9, 0);
+    camLookTarget.set(BALLOON_X + 1.5, balloonGroup.position.y + 1.9, 0);
 
     if (balloonGroup.position.y >= TARGET_SKY_ALTITUDE) {
       balloonGroup.position.y = TARGET_SKY_ALTITUDE;
@@ -407,20 +587,11 @@ function animate() {
       startDialogue();
     }
 
-  } else if (gameState === 'TALKING' || gameState === 'READY_TO_HOP_CLOUD') {
-    if (gameState === 'READY_TO_HOP_CLOUD' && !keys.Space) {
-      balloonGroup.position.y = THREE.MathUtils.damp(
-        balloonGroup.position.y,
-        TARGET_SKY_ALTITUDE + Math.sin(elapsed * 1.3) * 0.14,
-        3,
-        dt
-      );
-    }
-
-    camBasePos.x = THREE.MathUtils.damp(camBasePos.x, 7.5, 3, dt);
+  } else if (gameState === 'TALKING') {
+    camBasePos.x = THREE.MathUtils.damp(camBasePos.x, BALLOON_X + 2.2, 3, dt);
     camBasePos.y = THREE.MathUtils.damp(camBasePos.y, TARGET_SKY_ALTITUDE + 1.8, 3, dt);
     camBasePos.z = THREE.MathUtils.damp(camBasePos.z, 11.2, 3, dt);
-    camLookTarget.set(7.5, TARGET_SKY_ALTITUDE + 1.4, 0);
+    camLookTarget.set(BALLOON_X + 2.2, TARGET_SKY_ALTITUDE + 1.4, 0);
 
   } else if (gameState === 'JUMPING_TO_CLOUD') {
     hopProgress = Math.min(1, hopProgress + dt * 2.0);
@@ -429,18 +600,13 @@ function animate() {
     playerGroup.position.lerpVectors(hopStartPos, targetPos, hopProgress);
     playerGroup.position.y += Math.sin(hopProgress * Math.PI) * 1.5;
 
-    squashScaleY = THREE.MathUtils.damp(squashScaleY, 1.0, 10, dt);
-    const invScale = 1 / Math.sqrt(squashScaleY);
-    charVisual.scale.set(invScale, squashScaleY, invScale);
-
     if (hopProgress >= 1) {
       gameState = 'CLOUD_RIDE';
       mrSkyRig.add(playerGroup);
       playerGroup.position.set(0, 1.0, 0);
       squashScaleY = 0.80;
       cloudSpringVel = -4.2;
-      whisperEl.textContent = "a / d to move mr. cloud · space + a at left edge to hop back in balloon";
-      setThought("move right with D—watch mr. cloud turn blue!");
+      setThought("use A and D to glide with mr. cloud!");
     }
 
   } else if (gameState === 'JUMPING_TO_BALLOON') {
@@ -456,9 +622,8 @@ function animate() {
       playerGroup.position.set(0, 0.22, 0);
       squashScaleY = 0.82;
       basketSpringVel = -4.0;
-      balloonGroup.position.y = TARGET_SKY_ALTITUDE - 0.4;
-      setThought("back in the basket! release space to float down, or space + d for mr. cloud");
-      whisperEl.textContent = "space + d → hop onto mr. cloud · release space → float down to stones";
+      balloonGroup.position.y = TARGET_SKY_ALTITUDE - 0.5;
+      setThought("back in the balloon!");
     }
 
   } else if (gameState === 'JUMPING_TO_STONES') {
@@ -473,7 +638,6 @@ function animate() {
       isGrounded = true;
       squashScaleY = 0.82;
       setThought("back on the stones!");
-      whisperEl.textContent = "a / d to move · space to jump";
     }
 
   } else if (gameState === 'CLOUD_RIDE') {
@@ -481,7 +645,7 @@ function animate() {
     if (keys.KeyD) cloudInputX += 1;
     if (keys.KeyA) cloudInputX -= 1;
 
-    const maxCloudSpeed = 5.6;
+    const maxCloudSpeed = 5.8;
     cloudVelX = THREE.MathUtils.damp(cloudVelX, cloudInputX * maxCloudSpeed, 6.5, dt);
     mrSkyGroup.position.x = THREE.MathUtils.clamp(
       mrSkyGroup.position.x + cloudVelX * dt,
@@ -506,10 +670,7 @@ function animate() {
     const targetTilt = -cloudVelX * 0.022;
     mrSkyRig.rotation.z = THREE.MathUtils.damp(mrSkyRig.rotation.z, targetTilt, 6, dt);
 
-    let activeCaption = mrSkyGroup.position.x <= MR_SKY_START_X + 2.2
-      ? "press D to glide right · or space + A to hop back into the balloon"
-      : "gliding through the sky...";
-
+    let activeCaption = "gliding through the sky...";
     for (const st of SKY_STATIONS) {
       if (Math.abs(mrSkyGroup.position.x - st.x) < 4.6) {
         activeCaption = st.caption;
@@ -522,10 +683,43 @@ function animate() {
     camBasePos.y = THREE.MathUtils.damp(camBasePos.y, TARGET_SKY_ALTITUDE + 2.5, 4, dt);
     camBasePos.z = THREE.MathUtils.damp(camBasePos.z, 13.5, 3, dt);
     camLookTarget.set(camBasePos.x, TARGET_SKY_ALTITUDE + 2.2, 0);
+
+    // When reaching the last point (MR_SKY_END_X), transition to Stage 4 where Mr. Sky leaves!
+    if (mrSkyGroup.position.x >= MR_SKY_END_X - 0.15) {
+      triggerHopToEndStage();
+    }
+
+  } else if (gameState === 'JUMPING_TO_END') {
+    hopProgress = Math.min(1, hopProgress + dt * 2.0);
+    playerGroup.position.lerpVectors(hopStartPos, hopTargetPos, hopProgress);
+    playerGroup.position.y += Math.sin(hopProgress * Math.PI) * 1.35;
+
+    if (hopProgress >= 1) {
+      gameState = 'END_STAGE';
+      endCloudPerch.add(playerGroup);
+      playerGroup.position.set(0, 0.85, 0);
+      questionOverlay.classList.add('active');
+    }
+
+  } else if (gameState === 'END_STAGE') {
+    // Mr. Sky gently floats away upward and to the right, fading out into the sky!
+    mrSkyGroup.position.x += dt * 1.8;
+    mrSkyGroup.position.y += dt * 1.4;
+    mrCloudMat.opacity = THREE.MathUtils.damp(mrCloudMat.opacity, 0.0, 1.5, dt);
+    mrCloudEyeMat.opacity = mrCloudMat.opacity;
+
+    if (mrCloudMat.opacity < 0.02) {
+      mrSkyGroup.visible = false;
+    }
+
+    camBasePos.x = THREE.MathUtils.damp(camBasePos.x, endCloudPerch.position.x, 3, dt);
+    camBasePos.y = THREE.MathUtils.damp(camBasePos.y, TARGET_SKY_ALTITUDE + 2.2, 3, dt);
+    camBasePos.z = THREE.MathUtils.damp(camBasePos.z, 12.8, 3, dt);
+    camLookTarget.set(endCloudPerch.position.x, TARGET_SKY_ALTITUDE + 1.8, 0);
   }
 
   // ============================================================================
-  // 8. APPLY MOUSE PARALLAX TILT & OFFSET TO CAMERA
+  // 9. MOUSE PARALLAX TILT & OFFSET
   // ============================================================================
   mouseParallax.currentX = THREE.MathUtils.damp(mouseParallax.currentX, mouseParallax.targetX, 5, dt);
   mouseParallax.currentY = THREE.MathUtils.damp(mouseParallax.currentY, mouseParallax.targetY, 5, dt);

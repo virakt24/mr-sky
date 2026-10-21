@@ -21,33 +21,31 @@ export const CUSTOM_ASSETS = {
   skyBgTextureUrl: ''
 };
 
-// Press 'C' in-game to toggle the green stone mapping outlines
-export const SHOW_LANDING_AREAS = false;
-
-// Shrinks the mapped landing zone of each stone (decrease to 0.45 for even smaller pads)
-export const ROCK_MAPPING_WIDTH_SCALE = 0.60;
-export const ROCK_MAPPING_HEIGHT_SCALE = 0.82;
-export const ROCK_MAPPING_DEPTH = 0.85;
+// Set to true (or press 'C' key in-game) to see your manual stone landing boxes!
+export const SHOW_LANDING_AREAS = true;
+export const ROCK_MAPPING_DEPTH = 0.9;
 
 // ============================================================================
-// 2. SMALLER, TIGHTER ROCK LANDING AREAS
+// 2. 100% MANUAL STONE LANDING BOXES
 // ============================================================================
+// Edit minX (left edge), maxX (right edge), and topY (top surface height) for
+// each of your 4 stones below. Nothing will overwrite these numbers!
 export const STEPS = [
-  { minX: -40.0, maxX: -2.4, topY: 0.0,  stepId: 0 },
-  { minX: -2.4,  maxX: -1.3, topY: 0.55, stepId: 1 },
-  { minX: -1.3,  maxX: -0.2, topY: 1.10, stepId: 2 },
-  { minX: -0.2,  maxX:  0.9, topY: 1.65, stepId: 3 },
-  { minX:  0.9,  maxX:  2.2, topY: 2.20, stepId: 4 },
-  { minX:  2.2,  maxX: 40.0, topY: 0.0,  stepId: 0 }
+  { minX: -40.0, maxX: -2.5, topY: 0.0,  stepId: 0 }, // Ground before stones
+  { minX: -2.85,  maxX: -1.52, topY: 0.70, stepId: 1 }, // Stone 1 manual box
+  { minX: -1.52,  maxX: 0.8, topY: 1.4, stepId: 2 }, // Stone 2 manual box
+  { minX: 0.8,  maxX:  2.5, topY: 2.2, stepId: 3 }, // Stone 3 manual box
+  { minX:  2.5,  maxX:  5, topY: 2.6, stepId: 4 }, // Stone 4 manual box
+  { minX:  3.7,  maxX: 40.0, topY: 0.0,  stepId: 0 }  // d Ground after stones
 ];
 
 // ============================================================================
 // 3. WORLD COORDINATES & SHORT HUMANLIKE TEXT
 // ============================================================================
-export const BALLOON_X = 5.25;
+export const BALLOON_X = 5.4;
 export const BALLOON_BASE_Y = 2.20;
 export const TARGET_SKY_ALTITUDE = 23.5;
-export const MR_SKY_START_X = 8.2;
+export const MR_SKY_START_X = 8.8;
 export const MR_SKY_END_X = 50.0;
 
 export const STEP_THOUGHTS = {
@@ -80,8 +78,8 @@ export const SKY_STATIONS = [
     caption: "little blue has tiny steps and bounces everywhere!"
   },
   {
-    x: 48.0,
+    x: 46.5,
     label: "Illustration 04",
-    caption: "all that bouncing blue light turns me bright blue!"
+    caption: "all that bouncing blue light turns me bright blue! keep going right →"
   }
 ];

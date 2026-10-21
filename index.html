@@ -17,17 +17,66 @@
     <p class="loader-text">Loading..</p>
   </div>
 
+  <!-- Global Top Stage Navigation -->
+  <nav id="global-nav" aria-label="Stage Navigation">
+    <button class="nav-step active" data-stage="1">1. Stones</button>
+    <span class="nav-divider">·</span>
+    <button class="nav-step" data-stage="2">2. Balloon</button>
+    <span class="nav-divider">·</span>
+    <button class="nav-step" data-stage="3">3. Mr. Sky</button>
+    <span class="nav-divider">·</span>
+    <button class="nav-step" data-stage="4">4. Why Not Violet?</button>
+  </nav>
+
   <div id="canvas-container"></div>
 
   <!-- Short humanlike floating text (NO rectangles) -->
   <div id="thought-text">hey... ever wonder why the sky is blue?</div>
-  <div id="whisper-hint">a / d to move · space to jump</div>
 
-  <!-- Dialogue Rectangle (ONLY visible when speaking with Mr. Sky) -->
+  <!-- Dialogue Rectangle (ONLY visible when speaking with Mr. Cloud) -->
   <div id="dialogue-box">
     <div id="speaker-name">mr. cloud</div>
     <div id="dialogue-text"></div>
-    <div id="dialogue-next">space to continue →</div>
+    <div id="dialogue-next">space or click to continue →</div>
+  </div>
+
+  <!-- Stage 4: End Question Section ("Why is the sky not violet?") -->
+  <div id="question-overlay">
+    <div class="question-card">
+      <div class="question-tag">final curiosity</div>
+      <h2 class="question-title">Why is the sky not violet?</h2>
+      <p class="question-sub">
+        Violet light actually has even shorter, bouncier steps than blue light. So why doesn’t the sky look violet to us?
+      </p>
+      <form id="question-form" autocomplete="off">
+        <input
+          type="text"
+          id="violet-input"
+          placeholder="type your guess here..."
+          maxlength="180"
+          required
+        />
+        <button type="submit" id="violet-submit">share thought →</button>
+      </form>
+      <div id="violet-feedback" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- Transparent Clickable On-Screen Controls (Context-Sensitive) -->
+  <div id="controls-hud">
+    <button id="btn-left" class="ctrl-btn" aria-label="Move Left">
+      <span class="key-main">A</span>
+      <span class="key-arrow">←</span>
+    </button>
+
+    <button id="btn-space" class="ctrl-btn ctrl-space" aria-label="Jump or Fly">
+      <span class="key-main" id="space-label">SPACE</span>
+    </button>
+
+    <button id="btn-right" class="ctrl-btn" aria-label="Move Right">
+      <span class="key-main">D</span>
+      <span class="key-arrow">→</span>
+    </button>
   </div>
 
   <script type="importmap">

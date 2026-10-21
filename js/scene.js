@@ -1,11 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import {
-  SHOW_LANDING_AREAS,
-  ROCK_MAPPING_WIDTH_SCALE,
-  ROCK_MAPPING_HEIGHT_SCALE,
-  ROCK_MAPPING_DEPTH
-} from './config.js';
+import { SHOW_LANDING_AREAS, ROCK_MAPPING_DEPTH } from './config.js';
 
 export const loadingManager = new THREE.LoadingManager();
 export const gltfLoader = new GLTFLoader(loadingManager);
@@ -61,12 +56,14 @@ window.addEventListener('mousemove', (e) => {
   mouseParallax.targetY = -(e.clientY / window.innerHeight - 0.5) * 2;
 });
 
-// Press 'C' to toggle the green stone landing area outlines
+// Press 'C' to toggle the green manual stone landing box outlines
 export const landingAreaGroup = new THREE.Group();
 landingAreaGroup.visible = SHOW_LANDING_AREAS;
 scene.add(landingAreaGroup);
 
 window.addEventListener('keydown', (e) => {
+  // Ignore 'C' toggle if typing in the final question input box
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   if (e.code === 'KeyC') {
     landingAreaGroup.visible = !landingAreaGroup.visible;
   }
@@ -89,52 +86,7 @@ function applyMatteToModel(model) {
   });
 }
 
-// Measures only the top tip of a stone and shrinks its width/height by your config scale
-export function measureRockLandingArea(rockObject) {
-  rockObject.updateMatrixWorld(true);
-  const fullBox = new THREE.Box3().setFromObject(rockObject);
-  const height = fullBox.max.y - fullBox.min.y;
-  const plateauThresholdY = fullBox.max.y - height * 0.16;
-
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let topYSum = 0;
-  let topVertexCount = 0;
-
-  const tempVec = new THREE.Vector3();
-
-  rockObject.traverse((child) => {
-    if (child.isMesh && child.geometry && child.geometry.attributes.position) {
-      const posAttr = child.geometry.attributes.position;
-      for (let i = 0; i < posAttr.count; i++) {
-        tempVec.fromBufferAttribute(posAttr, i).applyMatrix4(child.matrixWorld);
-        if (tempVec.y >= plateauThresholdY) {
-          if (tempVec.x < minX) minX = tempVec.x;
-          if (tempVec.x > maxX) maxX = tempVec.x;
-          topYSum += tempVec.y;
-          topVertexCount++;
-        }
-      }
-    }
-  });
-
-  if (topVertexCount === 0 || minX === Infinity) {
-    minX = fullBox.min.x;
-    maxX = fullBox.max.x;
-  }
-
-  // Shrink the width around the stone's center so the mapped pad is compact
-  const centerX = (minX + maxX) * 0.5;
-  const halfWidth = Math.max(0.28, (maxX - minX) * 0.5 * ROCK_MAPPING_WIDTH_SCALE);
-  const rawTopY = topVertexCount > 0 ? topYSum / topVertexCount : fullBox.max.y;
-
-  return {
-    minX: centerX - halfWidth,
-    maxX: centerX + halfWidth,
-    topY: rawTopY * ROCK_MAPPING_HEIGHT_SCALE
-  };
-}
-
+// Draws green outlines showing your exact manual STEPS boxes from config.js
 export function rebuildLandingAreaVisuals(stepsArray) {
   while (landingAreaGroup.children.length > 0) {
     landingAreaGroup.remove(landingAreaGroup.children[0]);
@@ -142,17 +94,16 @@ export function rebuildLandingAreaVisuals(stepsArray) {
 
   stepsArray.forEach((s) => {
     if (s.topY > 0) {
-      const w = Math.max(0.2, s.maxX - s.minX);
+      const w = Math.max(0.1, s.maxX - s.minX);
       const cx = (s.minX + s.maxX) * 0.5;
 
-      const padGeo = new THREE.PlaneGeometry(w, ROCK_MAPPING_DEPTH);
-      const edges = new THREE.EdgesGeometry(padGeo);
+      const boxGeo = new THREE.BoxGeometry(w, s.topY, ROCK_MAPPING_DEPTH);
+      const edges = new THREE.EdgesGeometry(boxGeo);
       const line = new THREE.LineSegments(
         edges,
         new THREE.LineBasicMaterial({ color: '#58d68d', toneMapped: false })
       );
-      line.rotation.x = -Math.PI / 2;
-      line.position.set(cx, s.topY + 0.015, 0);
+      line.position.set(cx, s.topY * 0.5, 0);
       landingAreaGroup.add(line);
     }
   });

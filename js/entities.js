@@ -9,7 +9,7 @@ import {
 import { scene, loadCustomGLB } from './scene.js';
 
 // ============================================================================
-// 1. CUSTOM GIRL CHARACTER (NO DEFAULT PLACEHOLDER MESH)
+// 1. CUSTOM GIRL CHARACTER
 // ============================================================================
 export const playerGroup = new THREE.Group();
 scene.add(playerGroup);
@@ -33,7 +33,7 @@ loadCustomGLB(CUSTOM_ASSETS.girlModelUrl, charVisual, {
 playerGroup.position.set(-4.8, 0.0, 0);
 
 // ============================================================================
-// 2. CUSTOM HOT AIR BALLOON (NO DEFAULT PLACEHOLDER MESH)
+// 2. CUSTOM HOT AIR BALLOON
 // ============================================================================
 export const balloonGroup = new THREE.Group();
 balloonGroup.position.set(BALLOON_X, BALLOON_BASE_Y, 0);
@@ -48,7 +48,7 @@ loadCustomGLB(CUSTOM_ASSETS.balloonModelUrl, balloonRig, {
 });
 
 // ============================================================================
-// 3. SIMPLE MR. CLOUD (TRANSITIONS FROM GRAY TO BLUE AS HE MOVES LEFT -> RIGHT)
+// 3. SIMPLE MR. CLOUD (GRAY -> BLUE, FADES OUT AT STAGE 4)
 // ============================================================================
 export const mrSkyGroup = new THREE.Group();
 mrSkyGroup.position.set(MR_SKY_START_X, TARGET_SKY_ALTITUDE + 0.15, 0);
@@ -60,12 +60,12 @@ mrSkyGroup.add(mrSkyRig);
 export const mrCloudColorGray = new THREE.Color('#9ea4ad');
 export const mrCloudColorBlue = new THREE.Color('#5cb3f5');
 
-// Shared matte material for Mr. Cloud so we can smoothly shift his color
 export const mrCloudMat = new THREE.MeshLambertMaterial({
-  color: mrCloudColorGray.clone()
+  color: mrCloudColorGray.clone(),
+  transparent: true,
+  opacity: 1.0
 });
 
-// Clean, simple 3-puff rounded cloud silhouette
 const centerPuff = new THREE.Mesh(new THREE.SphereGeometry(1.35, 64, 64), mrCloudMat);
 centerPuff.scale.set(1.3, 0.78, 0.95);
 
@@ -77,13 +77,15 @@ sideRight.position.set(1.15, -0.12, 0);
 
 mrSkyRig.add(centerPuff, sideLeft, sideRight);
 
-// Minimalist cute eyes on Mr. Cloud
-const eyeMat = new THREE.MeshBasicMaterial({ color: '#333842' });
+export const mrCloudEyeMat = new THREE.MeshBasicMaterial({
+  color: '#333842',
+  transparent: true,
+  opacity: 1.0
+});
 const eyeGeo = new THREE.SphereGeometry(0.08, 24, 24);
-const eyeL = new THREE.Mesh(eyeGeo, eyeGeo);
-eyeL.material = eyeMat;
+const eyeL = new THREE.Mesh(eyeGeo, mrCloudEyeMat);
 eyeL.position.set(-0.32, 0.12, 1.24);
 
-const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+const eyeR = new THREE.Mesh(eyeGeo, mrCloudEyeMat);
 eyeR.position.set(0.32, 0.12, 1.24);
 mrSkyRig.add(eyeL, eyeR);
