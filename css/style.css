@@ -1,0 +1,111 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #d8d0e5;
+  font-family: 'Quicksand', sans-serif;
+  color: #ffffff;
+}
+
+#canvas-container {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+/* Minimal floating story thoughts & sky captions — NO rectangles */
+#thought-text {
+  position: fixed;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  z-index: 10;
+  font-family: 'Inter', sans-serif;
+  font-style: Bold;
+  font-size: clamp(18px, 2.1vw, 23px);
+  line-height: 1.55;
+  color: #fafafa;
+  text-align: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  text-shadow: 0 2px 18px rgba(255, 250, 245, 0.85);
+  max-width: min(680px, 86vw);
+}
+
+#thought-text.fade-out {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+#whisper-hint {
+  position: fixed;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  color: #ffffff;
+  opacity: 0.82;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+  text-shadow: 0 1px 10px rgba(255, 250, 245, 0.7);
+}
+
+/* Rectangle ONLY appears during talk with Mr. Sky */
+#dialogue-box {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%) translateY(15px);
+  z-index: 20;
+  width: min(560px, 88vw);
+  background: #fbf7f2;
+  border-radius: 22px;
+  padding: 26px 32px;
+  box-shadow: 0 14px 40px rgba(62, 52, 74, 0.10);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+#dialogue-box.active {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+#speaker-name {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #ffffff;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+#dialogue-text {
+  font-family: 'Inter', serif;
+  font-size: 18px;
+  line-height: 1.62;
+  color: #ffffff;
+  margin-bottom: 16px;
+}
+
+#dialogue-next {
+  font-size: 13px;
+  color: #9b8ea3;
+  text-align: right;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}

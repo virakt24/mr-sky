@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Why Is Mr. Sky Blue?</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <!-- Minimal floating text (NO rectangles!) -->
+  <div id="thought-text">“hi there... have you ever wondered why the sky is so blue?”</div>
+  <div id="whisper-hint">a / d to walk &nbsp;·&nbsp; space to hop up the rocks</div>
+
+  <!-- Dialogue Rectangle (ONLY visible when speaking with Mr. Sky) -->
+  <div id="dialogue-box">
+    <div id="speaker-name">Mr. Sky</div>
+    <div id="dialogue-text"></div>
+    <div id="dialogue-next">press space or click to continue →</div>
+  </div>
+
+  <!-- Three.js Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <!-- Main Entry Module -->
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
