@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { SHOW_LANDING_AREAS } from './config.js';
+import {
+  SHOW_LANDING_AREAS,
+  ROCK_MAPPING_WIDTH_SCALE,
+  ROCK_MAPPING_HEIGHT_SCALE,
+  ROCK_MAPPING_DEPTH
+} from './config.js';
 
-// Loading manager tracks when all your custom .glb files finish loading
 export const loadingManager = new THREE.LoadingManager();
 export const gltfLoader = new GLTFLoader(loadingManager);
 export const textureLoader = new THREE.TextureLoader(loadingManager);
@@ -51,14 +55,13 @@ dirLight.shadow.camera.bottom = -d;
 dirLight.shadow.bias = -0.0005;
 scene.add(dirLight);
 
-// Mouse Parallax State (Normalized -1 to +1)
 export const mouseParallax = { targetX: 0, targetY: 0, currentX: 0, currentY: 0 };
 window.addEventListener('mousemove', (e) => {
   mouseParallax.targetX = (e.clientX / window.innerWidth - 0.5) * 2;
   mouseParallax.targetY = -(e.clientY / window.innerHeight - 0.5) * 2;
 });
 
-// Optional landing area outlines (Press 'C' to toggle)
+// Press 'C' to toggle the green stone landing area outlines
 export const landingAreaGroup = new THREE.Group();
 landingAreaGroup.visible = SHOW_LANDING_AREAS;
 scene.add(landingAreaGroup);
@@ -86,16 +89,15 @@ function applyMatteToModel(model) {
   });
 }
 
+// Measures only the top tip of a stone and shrinks its width/height by your config scale
 export function measureRockLandingArea(rockObject) {
   rockObject.updateMatrixWorld(true);
   const fullBox = new THREE.Box3().setFromObject(rockObject);
   const height = fullBox.max.y - fullBox.min.y;
-  const plateauThresholdY = fullBox.max.y - height * 0.22;
+  const plateauThresholdY = fullBox.max.y - height * 0.16;
 
   let minX = Infinity;
   let maxX = -Infinity;
-  let minZ = Infinity;
-  let maxZ = -Infinity;
   let topYSum = 0;
   let topVertexCount = 0;
 
@@ -109,8 +111,6 @@ export function measureRockLandingArea(rockObject) {
         if (tempVec.y >= plateauThresholdY) {
           if (tempVec.x < minX) minX = tempVec.x;
           if (tempVec.x > maxX) maxX = tempVec.x;
-          if (tempVec.z < minZ) minZ = tempVec.z;
-          if (tempVec.z > maxZ) maxZ = tempVec.z;
           topYSum += tempVec.y;
           topVertexCount++;
         }
@@ -119,17 +119,20 @@ export function measureRockLandingArea(rockObject) {
   });
 
   if (topVertexCount === 0 || minX === Infinity) {
-    return {
-      minX: fullBox.min.x,
-      maxX: fullBox.max.x,
-      minZ: fullBox.min.z,
-      maxZ: fullBox.max.z,
-      topY: fullBox.max.y
-    };
+    minX = fullBox.min.x;
+    maxX = fullBox.max.x;
   }
 
-  const effectiveTopY = THREE.MathUtils.lerp(topYSum / topVertexCount, fullBox.max.y, 0.65);
-  return { minX, maxX, minZ, maxZ, topY: effectiveTopY };
+  // Shrink the width around the stone's center so the mapped pad is compact
+  const centerX = (minX + maxX) * 0.5;
+  const halfWidth = Math.max(0.28, (maxX - minX) * 0.5 * ROCK_MAPPING_WIDTH_SCALE);
+  const rawTopY = topVertexCount > 0 ? topYSum / topVertexCount : fullBox.max.y;
+
+  return {
+    minX: centerX - halfWidth,
+    maxX: centerX + halfWidth,
+    topY: rawTopY * ROCK_MAPPING_HEIGHT_SCALE
+  };
 }
 
 export function rebuildLandingAreaVisuals(stepsArray) {
@@ -140,10 +143,9 @@ export function rebuildLandingAreaVisuals(stepsArray) {
   stepsArray.forEach((s) => {
     if (s.topY > 0) {
       const w = Math.max(0.2, s.maxX - s.minX);
-      const d = 1.9;
       const cx = (s.minX + s.maxX) * 0.5;
 
-      const padGeo = new THREE.PlaneGeometry(w, d);
+      const padGeo = new THREE.PlaneGeometry(w, ROCK_MAPPING_DEPTH);
       const edges = new THREE.EdgesGeometry(padGeo);
       const line = new THREE.LineSegments(
         edges,
@@ -156,7 +158,6 @@ export function rebuildLandingAreaVisuals(stepsArray) {
   });
 }
 
-// Loads your custom .glb directly without showing any placeholder mesh
 export function loadCustomGLB(url, parentGroup, options = {}) {
   if (!url) return;
   const { scale = 1, position = [0, 0, 0], rotationY = 0, onLoaded = null } = options;

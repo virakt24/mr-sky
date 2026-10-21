@@ -10,7 +10,6 @@ import {
   scene,
   textureLoader,
   loadCustomGLB,
-  measureRockLandingArea,
   rebuildLandingAreaVisuals
 } from './scene.js';
 
@@ -44,7 +43,7 @@ if (CUSTOM_ASSETS.skyBgTextureUrl) {
 }
 
 // ============================================================================
-// 2. CUSTOM ENVIRONMENT & CUSTOM ROCKS ONLY (NO DEFAULT ASSETS)
+// 2. CUSTOM ENVIRONMENT & FLAT-TOP ROCK STEP DETECTOR
 // ============================================================================
 export const environmentGroup = new THREE.Group();
 scene.add(environmentGroup);
@@ -68,11 +67,78 @@ function stitchAdjacentRockSteps() {
     }
   }
   const lastRockStep = STEPS[STEPS.length - 2];
-  lastRockStep.maxX = Math.max(lastRockStep.maxX, BALLOON_X + 0.85);
+  lastRockStep.maxX = Math.max(lastRockStep.maxX, BALLOON_X);
   STEPS[0].maxX = STEPS[1].minX;
   STEPS[STEPS.length - 1].minX = lastRockStep.maxX;
 
   rebuildLandingAreaVisuals(STEPS);
+}
+
+// Automatically extracts 4 clean, flat-topped step colliders from rocks.glb
+// (Works whether rocks.glb is 4 separate meshes or 1 combined mesh)
+function buildFlatStepsFromRocksModel(model) {
+  model.updateMatrixWorld(true);
+  const fullBox = new THREE.Box3().setFromObject(model);
+  if (fullBox.isEmpty()) return;
+
+  const meshes = [];
+  model.traverse((child) => {
+    if (child.isMesh && child.geometry && child.geometry.attributes.position) {
+      const b = new THREE.Box3().setFromObject(child);
+      if (b.max.y > 0.15) {
+        meshes.push({ mesh: child, box: b, centerX: (b.min.x + b.max.x) * 0.5 });
+      }
+    }
+  });
+
+  // Case A: 4 separate rock meshes inside rocks.glb
+  if (meshes.length >= 4) {
+    meshes.sort((a, b) => a.centerX - b.centerX);
+    for (let i = 0; i < 4; i++) {
+      const m = meshes[i];
+      STEPS[i + 1].minX = m.box.min.x;
+      STEPS[i + 1].maxX = m.box.max.x;
+      // Slightly inset from peak spike so feet stand flush on the stone surface
+      STEPS[i + 1].topY = m.box.max.y * 0.94;
+    }
+  } else {
+    // Case B: All rocks joined into a single mesh — slice total X span into 4 steps
+    const totalMinX = fullBox.min.x;
+    const totalMaxX = fullBox.max.x;
+    const sliceWidth = (totalMaxX - totalMinX) / 4;
+    const tempVec = new THREE.Vector3();
+
+    for (let i = 0; i < 4; i++) {
+      const sMinX = totalMinX + i * sliceWidth;
+      const sMaxX = sMinX + sliceWidth;
+      let maxSliceY = 0;
+
+      meshes.forEach(({ mesh }) => {
+        const pos = mesh.geometry.attributes.position;
+        for (let v = 0; v < pos.count; v++) {
+          tempVec.fromBufferAttribute(pos, v).applyMatrix4(mesh.matrixWorld);
+          if (tempVec.x >= sMinX && tempVec.x <= sMaxX && tempVec.y > maxSliceY) {
+            maxSliceY = tempVec.y;
+          }
+        }
+      });
+
+      STEPS[i + 1].minX = sMinX;
+      STEPS[i + 1].maxX = sMaxX;
+      if (maxSliceY > 0.15) {
+        STEPS[i + 1].topY = maxSliceY * 0.94;
+      }
+    }
+  }
+
+  // Ensure each step strictly ascends so step walls behave predictably
+  for (let i = 2; i <= 4; i++) {
+    if (STEPS[i].topY <= STEPS[i - 1].topY + 0.2) {
+      STEPS[i].topY = STEPS[i - 1].topY + 0.55;
+    }
+  }
+
+  stitchAdjacentRockSteps();
 }
 
 stitchAdjacentRockSteps();
@@ -81,22 +147,7 @@ loadCustomGLB(CUSTOM_ASSETS.combinedRocksModelUrl, rocksGroup, {
   scale: CUSTOM_ASSETS.combinedRocksScale,
   position: CUSTOM_ASSETS.combinedRocksPosition,
   onLoaded: (gltf, model) => {
-    const detectedRocks = [];
-    model.children.forEach((child) => {
-      const bounds = measureRockLandingArea(child);
-      if (isFinite(bounds.minX) && bounds.topY > 0.15) {
-        detectedRocks.push(bounds);
-      }
-    });
-    detectedRocks.sort((a, b) => a.minX - b.minX);
-    detectedRocks.forEach((b, idx) => {
-      if (STEPS[idx + 1] && STEPS[idx + 1].topY > 0) {
-        STEPS[idx + 1].minX = b.minX;
-        STEPS[idx + 1].maxX = b.maxX;
-        STEPS[idx + 1].topY = b.topY;
-      }
-    });
-    stitchAdjacentRockSteps();
+    buildFlatStepsFromRocksModel(model);
   }
 });
 
@@ -112,20 +163,17 @@ function create2DCloudVariant(shapeIndex) {
   ctx.beginPath();
 
   if (shapeIndex === 0) {
-    // Classic wide fluffy cumulus
     ctx.arc(145, 165, 52, 0, Math.PI * 2);
     ctx.arc(235, 125, 76, 0, Math.PI * 2);
     ctx.arc(330, 150, 60, 0, Math.PI * 2);
     ctx.arc(390, 175, 40, 0, Math.PI * 2);
     ctx.roundRect(95, 168, 320, 48, 24);
   } else if (shapeIndex === 1) {
-    // Tall asymmetric sky puff
     ctx.arc(190, 165, 58, 0, Math.PI * 2);
     ctx.arc(275, 115, 82, 0, Math.PI * 2);
     ctx.arc(355, 168, 48, 0, Math.PI * 2);
     ctx.roundRect(132, 165, 270, 52, 26);
   } else if (shapeIndex === 2) {
-    // Long flat stratus glider cloud
     ctx.arc(120, 175, 38, 0, Math.PI * 2);
     ctx.arc(195, 155, 50, 0, Math.PI * 2);
     ctx.arc(280, 150, 54, 0, Math.PI * 2);
@@ -133,14 +181,12 @@ function create2DCloudVariant(shapeIndex) {
     ctx.arc(415, 180, 32, 0, Math.PI * 2);
     ctx.roundRect(82, 172, 365, 42, 21);
   } else if (shapeIndex === 3) {
-    // Twin round cotton puffs
     ctx.arc(185, 145, 68, 0, Math.PI * 2);
     ctx.arc(305, 140, 72, 0, Math.PI * 2);
     ctx.arc(115, 175, 38, 0, Math.PI * 2);
     ctx.arc(380, 175, 38, 0, Math.PI * 2);
     ctx.roundRect(85, 165, 330, 48, 24);
   } else {
-    // Small cozy single puff
     ctx.arc(215, 158, 52, 0, Math.PI * 2);
     ctx.arc(275, 142, 62, 0, Math.PI * 2);
     ctx.arc(335, 165, 44, 0, Math.PI * 2);
@@ -175,7 +221,7 @@ const clouds2D = [];
     transparent: true,
     opacity: 0.98,
     depthWrite: false,
-    toneMapped: false // Pure 2D white without exposure darkening
+    toneMapped: false
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.scale, cfg.scale * 0.5), mat);
   mesh.position.set(cfg.x, cfg.y, cfg.z);
@@ -192,13 +238,11 @@ function createPlaceholderTexture(label) {
   canvas.height = 384;
   const ctx = canvas.getContext('2d');
 
-  // Soft minimal matte card
   ctx.fillStyle = '#faf7f2';
   ctx.beginPath();
   ctx.roundRect(12, 12, 488, 360, 28);
   ctx.fill();
 
-  // Subtle dashed placeholder border
   ctx.strokeStyle = '#d5ccdc';
   ctx.lineWidth = 4;
   ctx.setLineDash([12, 10]);
@@ -207,7 +251,6 @@ function createPlaceholderTexture(label) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Minimal placeholder label
   ctx.fillStyle = '#8c8296';
   ctx.font = '500 26px Quicksand, sans-serif';
   ctx.textAlign = 'center';

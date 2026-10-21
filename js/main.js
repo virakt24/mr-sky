@@ -17,7 +17,7 @@ import {
   loadingManager,
   mouseParallax
 } from './scene.js';
-import { updateWorld, rocksGroup } from './world.js';
+import { updateWorld } from './world.js';
 import {
   playerGroup,
   charVisual,
@@ -49,7 +49,6 @@ loadingManager.onLoad = () => {
   tryHideLoadingScreen();
 };
 
-// Fallback in case no external textures/models are queued
 setTimeout(() => {
   minTimeElapsed = true;
   assetsLoaded = true;
@@ -79,9 +78,6 @@ function setThought(text) {
 // 3. GAME STATE & PHYSICS VARIABLES (A & D ONLY)
 // ============================================================================
 const keys = { KeyA: false, KeyD: false, Space: false };
-// States:
-// PLATFORMING | BALLOON_FLIGHT | TALKING | READY_TO_HOP_CLOUD |
-// JUMPING_TO_CLOUD | CLOUD_RIDE | JUMPING_TO_BALLOON | JUMPING_TO_STONES
 let gameState = 'PLATFORMING';
 let hasMetMrSky = false;
 
@@ -104,57 +100,17 @@ let cloudSpringY = 0;
 let cloudSpringVel = 0;
 let dialogueIndex = 0;
 
-// Base camera target before mouse parallax is applied
 const camBasePos = new THREE.Vector3(-1.5, 2.7, 14.5);
 const camLookTarget = new THREE.Vector3(-1.5, 2.2, 0);
 
 // ============================================================================
-// 4. 3-POINT FOOT RAYCASTER FOR ROCK LANDING AREAS
+// 4. CRISP STEP COLLISION HELPERS (REQUIRES SPACEBAR JUMP TO CLIMB)
 // ============================================================================
-const downRaycaster = new THREE.Raycaster();
-const downDir = new THREE.Vector3(0, -1, 0);
-const rayOrigin = new THREE.Vector3();
-const normalMatrix = new THREE.Matrix3();
-const worldNormal = new THREE.Vector3();
-
 function getStepAtX(x) {
   for (const s of STEPS) {
     if (x >= s.minX && x <= s.maxX) return s;
   }
   return STEPS[0];
-}
-
-function getRockSurfaceAt(x, y, z) {
-  const stepData = getStepAtX(x);
-  let bestY = stepData.topY;
-
-  const footOffsets = [-0.24, 0.0, 0.24];
-  let highestMeshHitY = -Infinity;
-
-  for (const ox of footOffsets) {
-    rayOrigin.set(x + ox, y + 1.2, z);
-    downRaycaster.set(rayOrigin, downDir);
-    downRaycaster.far = 4.0;
-
-    const hits = downRaycaster.intersectObjects(rocksGroup.children, true);
-    for (const hit of hits) {
-      if (!hit.object.visible) continue;
-      if (hit.face) {
-        normalMatrix.getNormalMatrix(hit.object.matrixWorld);
-        worldNormal.copy(hit.face.normal).applyMatrix3(normalMatrix).normalize();
-        if (worldNormal.y < 0.45) continue;
-      }
-      if (hit.point.y <= y + 0.45 && hit.point.y > highestMeshHitY) {
-        highestMeshHitY = hit.point.y;
-      }
-    }
-  }
-
-  if (highestMeshHitY > -Infinity) {
-    bestY = Math.max(highestMeshHitY, stepData.topY * 0.85);
-  }
-
-  return { topY: bestY, stepId: stepData.stepId };
 }
 
 // ============================================================================
@@ -163,7 +119,7 @@ function getRockSurfaceAt(x, y, z) {
 function startDialogue() {
   if (hasMetMrSky) {
     gameState = 'READY_TO_HOP_CLOUD';
-    setThought("press space + d to hop onto mr. cloud, or space + a when down by the stones");
+    setThought("press space + d to hop onto mr. cloud");
     whisperEl.textContent = "space + d → hop onto mr. cloud";
     whisperEl.style.opacity = '0.8';
     return;
@@ -190,11 +146,9 @@ function advanceDialogue() {
   }
 }
 
-// Hop: Balloon -> Mr. Cloud
 function triggerJumpOntoCloud() {
   gameState = 'JUMPING_TO_CLOUD';
   hopProgress = 0;
-  // Reaction dip on the balloon basket as she pushes off!
   basketSpringVel = -3.4;
 
   playerGroup.getWorldPosition(hopStartPos);
@@ -204,11 +158,9 @@ function triggerJumpOntoCloud() {
   squashScaleY = 1.25;
 }
 
-// Hop Back: Mr. Cloud -> Balloon Basket
 function triggerJumpBackToBalloon() {
   gameState = 'JUMPING_TO_BALLOON';
   hopProgress = 0;
-  // Reaction push-off squish on Mr. Cloud!
   cloudSpringVel = -3.5;
 
   playerGroup.getWorldPosition(hopStartPos);
@@ -218,11 +170,9 @@ function triggerJumpBackToBalloon() {
   squashScaleY = 1.25;
 }
 
-// Hop Back: Balloon Basket -> Top Stone
 function triggerJumpBackToStones() {
   gameState = 'JUMPING_TO_STONES';
   hopProgress = 0;
-  // Reaction bounce on the balloon basket as she jumps out!
   basketSpringVel = -3.6;
 
   playerGroup.getWorldPosition(hopStartPos);
@@ -231,7 +181,7 @@ function triggerJumpBackToStones() {
   charVisual.rotation.y = Math.PI;
   squashScaleY = 1.24;
 
-  const topStoneX = Math.min(STEPS[4].maxX - 1.1, BALLOON_X - 1.35);
+  const topStoneX = (STEPS[4].minX + Math.min(STEPS[4].maxX, BALLOON_X - 0.6)) * 0.5;
   hopTargetPos.set(topStoneX, STEPS[4].topY, 0);
 }
 
@@ -255,30 +205,24 @@ window.addEventListener('keydown', (e) => {
     } else if (gameState === 'TALKING') {
       advanceDialogue();
     } else if (gameState === 'BALLOON_FLIGHT' || gameState === 'READY_TO_HOP_CLOUD') {
-      // Hop back onto stones if near the bottom and pressing A
       if (keys.KeyA && balloonGroup.position.y <= BALLOON_BASE_Y + 2.8) {
         triggerJumpBackToStones();
-      }
-      // Hop onto Mr. Cloud if near the top and pressing D (or in READY_TO_HOP_CLOUD)
-      else if (
+      } else if (
         (keys.KeyD || gameState === 'READY_TO_HOP_CLOUD') &&
         balloonGroup.position.y >= TARGET_SKY_ALTITUDE - 2.2
       ) {
         triggerJumpOntoCloud();
       }
     } else if (gameState === 'CLOUD_RIDE') {
-      // If near the balloon on the left edge and pressing Space + A, hop back into the balloon!
       if (keys.KeyA && mrSkyGroup.position.x <= MR_SKY_START_X + 2.2) {
         triggerJumpBackToBalloon();
       } else {
-        // Playful hop on Mr. Cloud
         cloudSpringVel = -3.2;
         squashScaleY = 1.2;
       }
     }
   }
 
-  // Also allow pressing A or D while Space is already held
   if ((e.code === 'KeyA' || e.code === 'ArrowLeft') && keys.Space) {
     if (
       (gameState === 'BALLOON_FLIGHT' || gameState === 'READY_TO_HOP_CLOUD') &&
@@ -290,7 +234,11 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  if ((e.code === 'KeyD' || e.code === 'ArrowRight') && (gameState === 'READY_TO_HOP_CLOUD' || (gameState === 'BALLOON_FLIGHT' && keys.Space && balloonGroup.position.y >= TARGET_SKY_ALTITUDE - 2.2))) {
+  if (
+    (e.code === 'KeyD' || e.code === 'ArrowRight') &&
+    (gameState === 'READY_TO_HOP_CLOUD' ||
+      (gameState === 'BALLOON_FLIGHT' && keys.Space && balloonGroup.position.y >= TARGET_SKY_ALTITUDE - 2.2))
+  ) {
     triggerJumpOntoCloud();
   }
 });
@@ -314,13 +262,12 @@ function animate() {
   if (girlMixer) girlMixer.update(dt);
   updateWorld(elapsed);
 
-  // Always update balloon basket spring reaction
+  // Balloon & Cloud spring reactions
   const bSpringForce = -28.0 * basketSpringY - 6.5 * basketSpringVel;
   basketSpringVel += bSpringForce * dt;
   basketSpringY += basketSpringVel * dt;
   balloonRig.position.y = basketSpringY + Math.sin(elapsed * 1.8) * 0.04;
 
-  // Always update Mr. Cloud spring reaction
   const cSpringForce = -26.0 * cloudSpringY - 6.0 * cloudSpringVel;
   cloudSpringVel += cSpringForce * dt;
   cloudSpringY += cloudSpringVel * dt;
@@ -342,43 +289,59 @@ function animate() {
 
     if (jumpBufferTimer > 0) jumpBufferTimer -= dt;
 
+    // 1. JUMP LAUNCH (Spacebar is required to gain height and climb stones!)
     if (jumpBufferTimer > 0 && coyoteTimer > 0) {
-      vel.y = 8.6;
+      vel.y = 9.2;
       isGrounded = false;
       coyoteTimer = 0;
       jumpBufferTimer = 0;
       squashScaleY = 1.24;
     }
 
+    // 2. VERTICAL MOVEMENT & GRAVITY FIRST
+    const prevY = playerGroup.position.y;
     vel.y -= 21.0 * dt;
-
-    const nextX = THREE.MathUtils.clamp(playerGroup.position.x + vel.x * dt, -9.5, 6.2);
-    const charRadius = 0.26;
-    const aheadStep = getStepAtX(nextX + (vel.x >= 0 ? charRadius : -charRadius));
-
-    if (aheadStep.topY > playerGroup.position.y + 0.32) {
-      vel.x = 0;
-    } else {
-      playerGroup.position.x = nextX;
-    }
-
-    playerGroup.position.z = 0;
     playerGroup.position.y += vel.y * dt;
 
-    const surface = getRockSurfaceAt(playerGroup.position.x, playerGroup.position.y, 0);
+    // 3. HORIZONTAL MOVEMENT WITH STRICT WALL COLLISION
+    // You can NEVER walk onto a higher stone without jumping above its topY first!
+    const charRadius = 0.22;
+    let proposedX = THREE.MathUtils.clamp(playerGroup.position.x + vel.x * dt, -9.5, 6.2);
 
-    if (playerGroup.position.y <= surface.topY) {
-      if (!isGrounded && vel.y < -2.0) squashScaleY = 0.82;
-      playerGroup.position.y = THREE.MathUtils.damp(playerGroup.position.y, surface.topY, 28, dt);
-      if (Math.abs(playerGroup.position.y - surface.topY) < 0.05) {
-        playerGroup.position.y = surface.topY;
+    if (Math.abs(vel.x) > 0.001) {
+      const leadingEdgeX = proposedX + (vel.x > 0 ? charRadius : -charRadius);
+      const aheadStep = getStepAtX(leadingEdgeX);
+
+      // If the stone ahead is higher than the girl's feet, block horizontal movement like a solid wall!
+      if (aheadStep.topY > playerGroup.position.y + 0.08) {
+        if (vel.x > 0) {
+          proposedX = Math.min(proposedX, aheadStep.minX - charRadius - 0.002);
+        } else {
+          proposedX = Math.max(proposedX, aheadStep.maxX + charRadius + 0.002);
+        }
+        vel.x = 0;
       }
+    }
+
+    playerGroup.position.x = proposedX;
+    playerGroup.position.z = 0;
+
+    // 4. LANDING CHECK (Only lands on a stone if falling onto it from above, or walking across it)
+    const underStep = getStepAtX(playerGroup.position.x);
+    if (vel.y <= 0 && prevY >= underStep.topY - 0.15 && playerGroup.position.y <= underStep.topY) {
+      if (!isGrounded && vel.y < -2.0) squashScaleY = 0.82;
+      playerGroup.position.y = underStep.topY;
       vel.y = 0;
       isGrounded = true;
 
-      if (STEP_THOUGHTS[surface.stepId]) {
-        setThought(STEP_THOUGHTS[surface.stepId]);
+      if (STEP_THOUGHTS[underStep.stepId]) {
+        setThought(STEP_THOUGHTS[underStep.stepId]);
       }
+    } else if (playerGroup.position.y <= 0.0) {
+      // Safety floor at y = 0
+      playerGroup.position.y = 0.0;
+      vel.y = 0;
+      isGrounded = true;
     } else {
       isGrounded = false;
     }
@@ -387,9 +350,9 @@ function animate() {
     const invScale = 1 / Math.sqrt(squashScaleY);
     charVisual.scale.set(invScale, squashScaleY, invScale);
 
-    // Step or hop into the Hot Air Balloon
+    // 5. BOARD THE HOT AIR BALLOON FROM TOP STONE
     const distToBasket = Math.abs(playerGroup.position.x - balloonGroup.position.x);
-    if (distToBasket < 1.05 && playerGroup.position.y >= STEPS[4].topY - 0.35 && vel.x >= 0) {
+    if (distToBasket < 1.05 && playerGroup.position.y >= STEPS[4].topY - 0.25 && vel.x >= 0) {
       gameState = 'BALLOON_FLIGHT';
       balloonRig.add(playerGroup);
       playerGroup.position.set(0, 0.22, 0);
@@ -445,7 +408,6 @@ function animate() {
     }
 
   } else if (gameState === 'TALKING' || gameState === 'READY_TO_HOP_CLOUD') {
-    // Allow descending back down if the player holds A or wants to go down
     if (gameState === 'READY_TO_HOP_CLOUD' && !keys.Space) {
       balloonGroup.position.y = THREE.MathUtils.damp(
         balloonGroup.position.y,
@@ -494,7 +456,6 @@ function animate() {
       playerGroup.position.set(0, 0.22, 0);
       squashScaleY = 0.82;
       basketSpringVel = -4.0;
-      // Nudge balloon slightly below target altitude so it can float down or hop back
       balloonGroup.position.y = TARGET_SKY_ALTITUDE - 0.4;
       setThought("back in the basket! release space to float down, or space + d for mr. cloud");
       whisperEl.textContent = "space + d → hop onto mr. cloud · release space → float down to stones";
@@ -528,7 +489,6 @@ function animate() {
       MR_SKY_END_X
     );
 
-    // Smoothly transition Mr. Cloud's color from Gray (left) to Blue (right)!
     const colorProgress = THREE.MathUtils.clamp(
       (mrSkyGroup.position.x - MR_SKY_START_X) / (MR_SKY_END_X - MR_SKY_START_X),
       0,
@@ -546,7 +506,6 @@ function animate() {
     const targetTilt = -cloudVelX * 0.022;
     mrSkyRig.rotation.z = THREE.MathUtils.damp(mrSkyRig.rotation.z, targetTilt, 6, dt);
 
-    // Update short humanlike caption near each placeholder
     let activeCaption = mrSkyGroup.position.x <= MR_SKY_START_X + 2.2
       ? "press D to glide right · or space + A to hop back into the balloon"
       : "gliding through the sky...";
