@@ -11,7 +11,71 @@ body, html {
   overflow: hidden;
   background-color: #d8d0e5;
   font-family: 'Quicksand', sans-serif;
-  color: #ffffff;
+  color: #463f4d;
+}
+
+/* 3-Second Cozy Loading Page */
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background-color: #ece6f2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  transition: opacity 0.7s ease, visibility 0.7s ease;
+}
+
+#loading-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader-cloud {
+  width: 64px;
+  height: 36px;
+  background: #ffffff;
+  border-radius: 36px;
+  position: relative;
+  animation: floatCloud 1.6s ease-in-out infinite;
+}
+
+.loader-cloud::before,
+.loader-cloud::after {
+  content: '';
+  position: absolute;
+  background: #ffffff;
+  border-radius: 50%;
+}
+
+.loader-cloud::before {
+  width: 32px;
+  height: 32px;
+  top: -14px;
+  left: 10px;
+}
+
+.loader-cloud::after {
+  width: 24px;
+  height: 24px;
+  top: -9px;
+  right: 10px;
+}
+
+.loader-text {
+  font-family: 'Lora', serif;
+  font-style: italic;
+  font-size: 16px;
+  color: #6b6275;
+  letter-spacing: 0.04em;
+}
+
+@keyframes floatCloud {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
 }
 
 #canvas-container {
@@ -20,63 +84,62 @@ body, html {
   z-index: 1;
 }
 
-/* Minimal floating story thoughts & sky captions — NO rectangles */
+/* Minimal floating text — NO rectangles */
 #thought-text {
   position: fixed;
   top: 12%;
   left: 50%;
   transform: translateX(-50%) translateY(0);
   z-index: 10;
-  font-family: 'Inter', sans-serif;
-  font-style: Bold;
-  font-size: clamp(18px, 2.1vw, 23px);
-  line-height: 1.55;
-  color: #fafafa;
+  font-family: 'Lora', serif;
+  font-style: italic;
+  font-size: clamp(17px, 2vw, 21px);
+  line-height: 1.5;
+  color: #3f3847;
   text-align: center;
   pointer-events: none;
   opacity: 1;
-  transition: opacity 0.6s ease, transform 0.6s ease;
-  text-shadow: 0 2px 18px rgba(255, 250, 245, 0.85);
-  max-width: min(680px, 86vw);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  text-shadow: 0 2px 16px rgba(255, 250, 245, 0.85);
+  max-width: min(560px, 86vw);
 }
 
 #thought-text.fade-out {
   opacity: 0;
-  transform: translateX(-50%) translateY(-8px);
+  transform: translateX(-50%) translateY(-6px);
 }
 
 #whisper-hint {
   position: fixed;
-  bottom: 34px;
+  bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.09em;
-  color: #ffffff;
-  opacity: 0.82;
+  letter-spacing: 0.08em;
+  color: #5b5263;
+  opacity: 0.78;
   text-align: center;
   pointer-events: none;
-  transition: opacity 0.5s ease;
-  text-shadow: 0 1px 10px rgba(255, 250, 245, 0.7);
+  transition: opacity 0.4s ease;
 }
 
-/* Rectangle ONLY appears during talk with Mr. Sky */
+/* Rectangle ONLY appears during talk with Mr. Cloud */
 #dialogue-box {
   position: fixed;
   bottom: 48px;
   left: 50%;
   transform: translateX(-50%) translateY(15px);
   z-index: 20;
-  width: min(560px, 88vw);
+  width: min(480px, 88vw);
   background: #fbf7f2;
-  border-radius: 22px;
-  padding: 26px 32px;
-  box-shadow: 0 14px 40px rgba(62, 52, 74, 0.10);
+  border-radius: 20px;
+  padding: 22px 28px;
+  box-shadow: 0 12px 34px rgba(62, 52, 74, 0.09);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.45s ease, transform 0.45s ease;
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 #dialogue-box.active {
@@ -86,26 +149,25 @@ body, html {
 }
 
 #speaker-name {
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: #ffffff;
-  margin-bottom: 8px;
+  color: #8e7f96;
+  margin-bottom: 6px;
   font-weight: 600;
 }
 
 #dialogue-text {
-  font-family: 'Inter', serif;
-  font-size: 18px;
-  line-height: 1.62;
-  color: #ffffff;
-  margin-bottom: 16px;
+  font-family: 'Lora', serif;
+  font-size: 17px;
+  line-height: 1.55;
+  color: #3d3642;
+  margin-bottom: 12px;
 }
 
 #dialogue-next {
-  font-size: 13px;
+  font-size: 12px;
   color: #9b8ea3;
   text-align: right;
   cursor: pointer;
-  letter-spacing: 0.05em;
 }

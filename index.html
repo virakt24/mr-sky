@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Why Is Mr. Sky Blue?</title>
+  <title>Mr. Sky</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -11,20 +11,25 @@
 </head>
 <body>
 
+  <!-- 3-Second Minimal Loading Screen -->
+  <div id="loading-screen">
+    <div class="loader-cloud"></div>
+    <p class="loader-text">waking up mr. sky...</p>
+  </div>
+
   <div id="canvas-container"></div>
 
-  <!-- Minimal floating text (NO rectangles!) -->
-  <div id="thought-text">“hi there... have you ever wondered why the sky is so blue?”</div>
-  <div id="whisper-hint">a / d to walk &nbsp;·&nbsp; space to hop up the rocks</div>
+  <!-- Short humanlike floating text (NO rectangles) -->
+  <div id="thought-text">hey... ever wonder why the sky is blue?</div>
+  <div id="whisper-hint">a / d to move · space to jump</div>
 
   <!-- Dialogue Rectangle (ONLY visible when speaking with Mr. Sky) -->
   <div id="dialogue-box">
-    <div id="speaker-name">Mr. Sky</div>
+    <div id="speaker-name">mr. cloud</div>
     <div id="dialogue-text"></div>
-    <div id="dialogue-next">press space or click to continue →</div>
+    <div id="dialogue-next">space to continue →</div>
   </div>
 
-  <!-- Three.js Import Map -->
   <script type="importmap">
     {
       "imports": {
@@ -34,7 +39,6 @@
     }
   </script>
 
-  <!-- Main Entry Module -->
   <script type="module" src="./js/main.js"></script>
 </body>
 </html>

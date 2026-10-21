@@ -2,15 +2,16 @@ import * as THREE from 'three';
 import {
   CUSTOM_ASSETS,
   STEPS,
+  BALLOON_X,
   SKY_STATIONS,
   TARGET_SKY_ALTITUDE
 } from './config.js';
 import {
   scene,
-  matteMat,
   textureLoader,
   loadCustomGLB,
-  loadRockStepGLB
+  measureRockLandingArea,
+  rebuildLandingAreaVisuals
 } from './scene.js';
 
 // ============================================================================
@@ -43,179 +44,138 @@ if (CUSTOM_ASSETS.skyBgTextureUrl) {
 }
 
 // ============================================================================
-// 2. ENVIRONMENT & CUSTOM ROCK STEPS
+// 2. CUSTOM ENVIRONMENT & CUSTOM ROCKS ONLY (NO DEFAULT ASSETS)
 // ============================================================================
-const environmentGroup = new THREE.Group();
+export const environmentGroup = new THREE.Group();
 scene.add(environmentGroup);
 
-const fallbackEnvGroup = new THREE.Group();
-environmentGroup.add(fallbackEnvGroup);
-
-// Solid desert sand floor
-const groundFloor = new THREE.Mesh(
-  new THREE.BoxGeometry(120, 6, 45),
-  matteMat('#f3dec9')
-);
-groundFloor.position.set(10, -3.0, 0);
-groundFloor.receiveShadow = true;
-fallbackEnvGroup.add(groundFloor);
-
-// Soft sculpted sand dunes
-const duneGeo = new THREE.SphereGeometry(1, 64, 48);
-[
-  { x: -8.5, y: -0.45, z: -2.8, sx: 6.5, sy: 1.2, sz: 3.5, col: '#f2dcc7' },
-  { x: -1.5, y: -0.55, z: -4.2, sx: 8.5, sy: 1.5, sz: 4.0, col: '#ebd1bc' },
-  { x: 7.5,  y: -0.45, z: -3.2, sx: 7.0, sy: 1.3, sz: 3.8, col: '#f2dcc7' },
-  { x: -5.8, y: -0.42, z: 2.3,  sx: 4.5, sy: 0.75, sz: 2.2, col: '#e8cbb6' },
-  { x: 2.2,  y: -0.48, z: 2.6,  sx: 5.5, sy: 0.80, sz: 2.4, col: '#f0d8c3' }
-].forEach((cfg) => {
-  const dune = new THREE.Mesh(duneGeo, matteMat(cfg.col));
-  dune.scale.set(cfg.sx, cfg.sy, cfg.sz);
-  dune.position.set(cfg.x, cfg.y, cfg.z);
-  dune.receiveShadow = true;
-  fallbackEnvGroup.add(dune);
+loadCustomGLB(CUSTOM_ASSETS.environmentModelUrl, environmentGroup, {
+  scale: CUSTOM_ASSETS.environmentScale,
+  position: CUSTOM_ASSETS.environmentPosition
 });
 
-// Distant rose-sandstone monolith
-const monolithGroup = new THREE.Group();
-monolithGroup.position.set(-2.5, 16, -26);
-fallbackEnvGroup.add(monolithGroup);
-
-const monolithCore = new THREE.Mesh(
-  new THREE.CylinderGeometry(6.8, 7.6, 42, 64),
-  matteMat('#d99382')
-);
-monolithGroup.add(monolithCore);
-
-for (let i = 0; i < 14; i++) {
-  const ridge = new THREE.Mesh(
-    new THREE.SphereGeometry(2.2 + (i % 3) * 0.6, 32, 32),
-    matteMat(i % 2 === 0 ? '#e39f8c' : '#c88278')
-  );
-  const angle = (i / 14) * Math.PI * 2;
-  ridge.position.set(Math.cos(angle) * 5.2, -14 + i * 2.4, Math.sin(angle) * 5.2);
-  ridge.scale.set(1.1, 2.2, 1.1);
-  monolithGroup.add(ridge);
-}
-
-// Lavender coral flora clusters
-const coralPalette = ['#9a78b8', '#b58ec9', '#8262a3', '#c79fd6'];
-const polypGeo = new THREE.CapsuleGeometry(0.06, 0.18, 16, 24);
-[
-  [-7.2, 0.0, 1.2], [-6.4, 0.0, -1.1], [-4.3, 0.0, 1.4],
-  [-2.6, 0.0, 1.5], [0.2, 0.0, 1.55], [3.1, 0.0, 1.5],
-  [6.8, 0.0, 1.2], [8.1, 0.0, -1.2]
-].forEach(([cx, cy, cz]) => {
-  const cluster = new THREE.Group();
-  cluster.position.set(cx, cy, cz);
-  for (let i = 0; i < 10; i++) {
-    const polyp = new THREE.Mesh(polypGeo, matteMat(coralPalette[i % coralPalette.length]));
-    const angle = (i / 10) * Math.PI * 2 + i * 0.5;
-    const r = 0.08 + (i % 3) * 0.12;
-    polyp.position.set(Math.cos(angle) * r, 0.08 + (i % 2) * 0.04, Math.sin(angle) * r);
-    polyp.rotation.z = (Math.random() - 0.5) * 0.25;
-    polyp.castShadow = true;
-    cluster.add(polyp);
-  }
-  fallbackEnvGroup.add(cluster);
-});
-
-// ============================================================================
-// 3. STEPPING ROCKS (SUPPORTS BOTH COMBINED OR PER-STEP .GLB ROCK MODELS)
-// ============================================================================
-const rocksGroup = new THREE.Group();
+export const rocksGroup = new THREE.Group();
 scene.add(rocksGroup);
 
-const fallbackRocksGroup = new THREE.Group();
-rocksGroup.add(fallbackRocksGroup);
+function stitchAdjacentRockSteps() {
+  for (let i = 1; i < STEPS.length - 1; i++) {
+    const current = STEPS[i];
+    const next = STEPS[i + 1];
+    if (next.topY > 0 && current.maxX < next.minX) {
+      const midX = (current.maxX + next.minX) * 0.5;
+      current.maxX = midX;
+      next.minX = midX;
+    }
+  }
+  const lastRockStep = STEPS[STEPS.length - 2];
+  lastRockStep.maxX = Math.max(lastRockStep.maxX, BALLOON_X + 0.85);
+  STEPS[0].maxX = STEPS[1].minX;
+  STEPS[STEPS.length - 1].minX = lastRockStep.maxX;
 
-STEPS.forEach((s) => {
-  if (s.topY > 0) {
-    const w = s.maxX - s.minX;
-    const h = s.topY;
-    const cx = (s.minX + s.maxX) * 0.5;
-    const d = 2.4;
+  rebuildLandingAreaVisuals(STEPS);
+}
 
-    // Fallback sculpted rock step group (hidden automatically when custom rock .glb loads)
-    const singleRockFallback = new THREE.Group();
-    fallbackRocksGroup.add(singleRockFallback);
+stitchAdjacentRockSteps();
 
-    const blockMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h + 0.4, d), matteMat(s.col));
-    blockMesh.position.set(cx, (h - 0.4) * 0.5, 0);
-    blockMesh.castShadow = true;
-    blockMesh.receiveShadow = true;
-    singleRockFallback.add(blockMesh);
-
-    const bevelTop = new THREE.Mesh(new THREE.BoxGeometry(w - 0.06, 0.1, d - 0.08), matteMat(s.col));
-    bevelTop.position.set(cx, h, 0);
-    bevelTop.receiveShadow = true;
-    singleRockFallback.add(bevelTop);
-
-    // If an individual rockModelUrl is set in config.js for this step, load & fit it!
-    loadRockStepGLB(s, rocksGroup, singleRockFallback);
+loadCustomGLB(CUSTOM_ASSETS.combinedRocksModelUrl, rocksGroup, {
+  scale: CUSTOM_ASSETS.combinedRocksScale,
+  position: CUSTOM_ASSETS.combinedRocksPosition,
+  onLoaded: (gltf, model) => {
+    const detectedRocks = [];
+    model.children.forEach((child) => {
+      const bounds = measureRockLandingArea(child);
+      if (isFinite(bounds.minX) && bounds.topY > 0.15) {
+        detectedRocks.push(bounds);
+      }
+    });
+    detectedRocks.sort((a, b) => a.minX - b.minX);
+    detectedRocks.forEach((b, idx) => {
+      if (STEPS[idx + 1] && STEPS[idx + 1].topY > 0) {
+        STEPS[idx + 1].minX = b.minX;
+        STEPS[idx + 1].maxX = b.maxX;
+        STEPS[idx + 1].topY = b.topY;
+      }
+    });
+    stitchAdjacentRockSteps();
   }
 });
 
-// Or if a single combined rock staircase .glb is set in config.js, load that instead:
-loadCustomGLB(CUSTOM_ASSETS.combinedRocksModelUrl, rocksGroup, fallbackRocksGroup, {
-  scale: CUSTOM_ASSETS.combinedRocksScale,
-  position: CUSTOM_ASSETS.combinedRocksPosition
-});
-
-loadCustomGLB(CUSTOM_ASSETS.environmentModelUrl, environmentGroup, fallbackEnvGroup);
-
 // ============================================================================
-// 4. 2D FLAT MATTE CLOUDS
+// 3. PURE 2D WHITE CLOUDS IN 5 DIFFERENT SHAPES
 // ============================================================================
-function createDefault2DCloudTexture() {
+function create2DCloudVariant(shapeIndex) {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#f7eff5';
+  ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(150, 165, 55, 0, Math.PI * 2);
-  ctx.arc(235, 130, 75, 0, Math.PI * 2);
-  ctx.arc(325, 150, 62, 0, Math.PI * 2);
-  ctx.arc(385, 175, 42, 0, Math.PI * 2);
-  ctx.arc(105, 180, 40, 0, Math.PI * 2);
-  ctx.roundRect(75, 172, 345, 46, 23);
-  ctx.fill();
 
-  ctx.fillStyle = '#e5d4e6';
-  ctx.beginPath();
-  ctx.roundRect(92, 196, 315, 22, 11);
-  ctx.fill();
+  if (shapeIndex === 0) {
+    // Classic wide fluffy cumulus
+    ctx.arc(145, 165, 52, 0, Math.PI * 2);
+    ctx.arc(235, 125, 76, 0, Math.PI * 2);
+    ctx.arc(330, 150, 60, 0, Math.PI * 2);
+    ctx.arc(390, 175, 40, 0, Math.PI * 2);
+    ctx.roundRect(95, 168, 320, 48, 24);
+  } else if (shapeIndex === 1) {
+    // Tall asymmetric sky puff
+    ctx.arc(190, 165, 58, 0, Math.PI * 2);
+    ctx.arc(275, 115, 82, 0, Math.PI * 2);
+    ctx.arc(355, 168, 48, 0, Math.PI * 2);
+    ctx.roundRect(132, 165, 270, 52, 26);
+  } else if (shapeIndex === 2) {
+    // Long flat stratus glider cloud
+    ctx.arc(120, 175, 38, 0, Math.PI * 2);
+    ctx.arc(195, 155, 50, 0, Math.PI * 2);
+    ctx.arc(280, 150, 54, 0, Math.PI * 2);
+    ctx.arc(360, 165, 44, 0, Math.PI * 2);
+    ctx.arc(415, 180, 32, 0, Math.PI * 2);
+    ctx.roundRect(82, 172, 365, 42, 21);
+  } else if (shapeIndex === 3) {
+    // Twin round cotton puffs
+    ctx.arc(185, 145, 68, 0, Math.PI * 2);
+    ctx.arc(305, 140, 72, 0, Math.PI * 2);
+    ctx.arc(115, 175, 38, 0, Math.PI * 2);
+    ctx.arc(380, 175, 38, 0, Math.PI * 2);
+    ctx.roundRect(85, 165, 330, 48, 24);
+  } else {
+    // Small cozy single puff
+    ctx.arc(215, 158, 52, 0, Math.PI * 2);
+    ctx.arc(275, 142, 62, 0, Math.PI * 2);
+    ctx.arc(335, 165, 44, 0, Math.PI * 2);
+    ctx.roundRect(165, 165, 212, 44, 22);
+  }
 
+  ctx.fill();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
-const cloudTex = CUSTOM_ASSETS.cloud2DTextureUrl
-  ? textureLoader.load(CUSTOM_ASSETS.cloud2DTextureUrl)
-  : createDefault2DCloudTexture();
+const cloudTextures = [0, 1, 2, 3, 4].map((i) => create2DCloudVariant(i));
 
 const clouds2D = [];
 [
-  { x: -2.5, y: 12.5, z: -18, scale: 14.0, speed: 0.06 },
-  { x: -9,   y: 6.5,  z: -9,  scale: 6.0,  speed: 0.12 },
-  { x: 7.5,  y: 9.0,  z: -11, scale: 6.8,  speed: 0.08 },
-  { x: -4.5, y: 16.0, z: -8,  scale: 5.5,  speed: 0.14 },
-  { x: 8.2,  y: 20.5, z: -10, scale: 6.5,  speed: 0.10 },
-  { x: -5.5, y: 26.0, z: -7,  scale: 6.0,  speed: 0.09 },
-  { x: 15.0, y: 27.5, z: -9,  scale: 6.2,  speed: 0.08 },
-  { x: 25.0, y: 21.8, z: -8,  scale: 5.8,  speed: 0.11 },
-  { x: 35.0, y: 28.0, z: -10, scale: 6.6,  speed: 0.07 },
-  { x: 46.0, y: 22.0, z: -8,  scale: 6.0,  speed: 0.10 },
-  { x: 56.0, y: 26.5, z: -9,  scale: 6.4,  speed: 0.09 }
+  { x: -3.5, y: 12.0, z: -16, scale: 11.5, speed: 0.06, shape: 2 },
+  { x: -9.0, y: 6.5,  z: -9,  scale: 6.0,  speed: 0.12, shape: 0 },
+  { x: 7.5,  y: 9.0,  z: -11, scale: 6.8,  speed: 0.08, shape: 1 },
+  { x: -4.5, y: 16.0, z: -8,  scale: 5.2,  speed: 0.14, shape: 4 },
+  { x: 8.2,  y: 20.5, z: -10, scale: 6.5,  speed: 0.10, shape: 3 },
+  { x: -5.5, y: 26.0, z: -7,  scale: 5.8,  speed: 0.09, shape: 0 },
+  { x: 15.0, y: 27.5, z: -9,  scale: 6.4,  speed: 0.08, shape: 2 },
+  { x: 25.0, y: 21.8, z: -8,  scale: 5.6,  speed: 0.11, shape: 1 },
+  { x: 35.0, y: 28.0, z: -10, scale: 6.8,  speed: 0.07, shape: 3 },
+  { x: 46.0, y: 22.0, z: -8,  scale: 5.4,  speed: 0.10, shape: 4 },
+  { x: 56.0, y: 26.5, z: -9,  scale: 6.4,  speed: 0.09, shape: 0 }
 ].forEach((cfg) => {
   const mat = new THREE.MeshBasicMaterial({
-    map: cloudTex,
+    map: cloudTextures[cfg.shape],
+    color: '#ffffff',
     transparent: true,
-    opacity: 0.9,
-    depthWrite: false
+    opacity: 0.98,
+    depthWrite: false,
+    toneMapped: false // Pure 2D white without exposure darkening
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.scale, cfg.scale * 0.5), mat);
   mesh.position.set(cfg.x, cfg.y, cfg.z);
@@ -224,182 +184,64 @@ const clouds2D = [];
 });
 
 // ============================================================================
-// 5. THE 4 SKY ILLUSTRATIONS
+// 4. CLEAN PLACEHOLDER FRAMES FOR THE SKY ILLUSTRATIONS
 // ============================================================================
-const stationRenderers = [];
-
-SKY_STATIONS.forEach((st, idx) => {
-  const group = new THREE.Group();
-  group.position.set(st.x, TARGET_SKY_ALTITUDE + 3.0, -3.2);
-  scene.add(group);
-
-  const haloMesh = new THREE.Mesh(
-    new THREE.CircleGeometry(3.15, 64),
-    new THREE.MeshBasicMaterial({ color: '#f9f3eb', transparent: true, opacity: 0.92 })
-  );
-  haloMesh.position.z = -0.05;
-  group.add(haloMesh);
-
+function createPlaceholderTexture(label) {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
-  canvas.height = 512;
+  canvas.height = 384;
   const ctx = canvas.getContext('2d');
+
+  // Soft minimal matte card
+  ctx.fillStyle = '#faf7f2';
+  ctx.beginPath();
+  ctx.roundRect(12, 12, 488, 360, 28);
+  ctx.fill();
+
+  // Subtle dashed placeholder border
+  ctx.strokeStyle = '#d5ccdc';
+  ctx.lineWidth = 4;
+  ctx.setLineDash([12, 10]);
+  ctx.beginPath();
+  ctx.roundRect(32, 32, 448, 320, 18);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Minimal placeholder label
+  ctx.fillStyle = '#8c8296';
+  ctx.font = '500 26px Quicksand, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, 256, 192);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
-  let customImg = null;
-  if (CUSTOM_ASSETS.illustrationUrls[idx]) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = CUSTOM_ASSETS.illustrationUrls[idx];
-    img.onload = () => { customImg = img; };
-  }
+const placeholderGroups = [];
 
-  const artPlane = new THREE.Mesh(
-    new THREE.CircleGeometry(2.95, 64),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+SKY_STATIONS.forEach((st, idx) => {
+  const group = new THREE.Group();
+  group.position.set(st.x, TARGET_SKY_ALTITUDE + 3.1, -3.2);
+  scene.add(group);
+
+  const tex = createPlaceholderTexture(st.label);
+  const plane = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.6, 4.2),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false })
   );
-  group.add(artPlane);
+  group.add(plane);
 
-  stationRenderers.push({
-    group,
-    canvas,
-    ctx,
-    tex,
-    idx,
-    baseY: group.position.y,
-    customImg: () => customImg
-  });
+  placeholderGroups.push({ group, baseY: group.position.y, idx });
 });
 
 export function updateWorld(elapsed) {
-  // Drift 2D clouds
   clouds2D.forEach((c) => {
-    c.mesh.position.x = c.baseX + Math.sin(elapsed * c.speed) * 1.5;
+    c.mesh.position.x = c.baseX + Math.sin(elapsed * c.speed) * 1.4;
   });
 
-  // Animate 4 Sky Illustrations
-  const rainbow = ['#d97b6c', '#e39e6b', '#e6c57a', '#8fb89c', '#74a4bc', '#7c84b8', '#a88cb8'];
-
-  stationRenderers.forEach((sr) => {
-    const { ctx, tex, idx, group, baseY } = sr;
-    group.position.y = baseY + Math.sin(elapsed * 1.4 + idx) * 0.16;
-
-    const customImg = sr.customImg();
-    ctx.clearRect(0, 0, 512, 512);
-    ctx.fillStyle = '#f5efe6';
-    ctx.fillRect(0, 0, 512, 512);
-
-    if (customImg) {
-      ctx.drawImage(customImg, 0, 0, 512, 512);
-      tex.needsUpdate = true;
-      return;
-    }
-
-    if (idx === 0) {
-      ctx.fillStyle = '#fffdf7';
-      ctx.beginPath();
-      ctx.arc(256, 185, 76 + Math.sin(elapsed * 2.2) * 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#5c5346';
-      ctx.beginPath();
-      ctx.arc(236, 178, 5, 0, Math.PI * 2);
-      ctx.arc(276, 178, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      rainbow.forEach((col, i) => {
-        const x = 98 + i * 52;
-        const y = 370 + Math.sin(elapsed * 3 + i * 0.7) * 7;
-        const h = 64 - i * 5.5;
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.roundRect(x - 16, y - h, 32, h, 14);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(x, y - h - 16, 14, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    } else if (idx === 1) {
-      ctx.fillStyle = '#b8afa3';
-      for (let i = 0; i < 6; i++) {
-        ctx.beginPath();
-        ctx.arc(95 + i * 64, 370, 10, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.strokeStyle = '#d97b6c';
-      ctx.lineWidth = 9;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      for (let x = 55; x < 455; x += 5) {
-        const y = 325 - Math.abs(Math.sin((x - elapsed * 80) * 0.024)) * 115;
-        if (x === 55) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-
-      ctx.fillStyle = '#d97b6c';
-      ctx.beginPath();
-      ctx.arc(256, 145, 36, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (idx === 2) {
-      const pebbles = [
-        [160, 180], [340, 165], [250, 265], [145, 345], [355, 340], [256, 395]
-      ];
-
-      ctx.strokeStyle = '#74a4bc';
-      ctx.lineWidth = 5;
-      ctx.setLineDash([8, 8]);
-      ctx.lineDashOffset = -elapsed * 36;
-      ctx.beginPath();
-      pebbles.forEach(([px, py], i) => {
-        const next = pebbles[(i + 1) % pebbles.length];
-        ctx.moveTo(px, py);
-        ctx.lineTo(next[0], next[1]);
-      });
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      pebbles.forEach(([px, py], i) => {
-        ctx.fillStyle = '#c5bdb0';
-        ctx.beginPath();
-        ctx.arc(px, py, 14, 0, Math.PI * 2);
-        ctx.fill();
-
-        const bx = px + Math.cos(elapsed * 4.2 + i * 1.4) * 34;
-        const by = py + Math.sin(elapsed * 4.2 + i * 1.4) * 34;
-        ctx.fillStyle = '#5c95b5';
-        ctx.beginPath();
-        ctx.arc(bx, by, 13, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    } else if (idx === 3) {
-      ctx.fillStyle = '#92bdd4';
-      ctx.beginPath();
-      ctx.arc(256, 256, 115, 0, Math.PI * 2);
-      ctx.arc(170, 280, 78, 0, Math.PI * 2);
-      ctx.arc(342, 280, 78, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#e3998c';
-      ctx.beginPath();
-      ctx.arc(190, 275, 22, 0, Math.PI * 2);
-      ctx.arc(322, 275, 22, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = '#3d454d';
-      ctx.lineWidth = 5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(215, 250, 14, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(297, 250, 14, 0.15 * Math.PI, 0.85 * Math.PI);
-      ctx.stroke();
-    }
-
-    tex.needsUpdate = true;
+  placeholderGroups.forEach((p) => {
+    p.group.position.y = p.baseY + Math.sin(elapsed * 1.4 + p.idx) * 0.12;
   });
 }
