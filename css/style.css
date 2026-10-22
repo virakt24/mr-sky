@@ -2,6 +2,8 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  font-style: normal !important;
+  border-radius: 0 !important; /* Forces zero curves everywhere */
   user-select: none;
 }
 
@@ -38,9 +40,9 @@ body, html {
   width: 64px;
   height: 36px;
   background: #ffffff;
-  border-radius: 36px;
   position: relative;
   animation: floatCloud 1.6s ease-in-out infinite;
+  clip-path: polygon(10% 40%, 90% 40%, 100% 80%, 0% 80%);
 }
 
 .loader-cloud::before,
@@ -48,7 +50,6 @@ body, html {
   content: '';
   position: absolute;
   background: #ffffff;
-  border-radius: 50%;
 }
 
 .loader-cloud::before {
@@ -84,7 +85,9 @@ body, html {
   z-index: 1;
 }
 
-/* Global Top Stage Navigation Bar */
+/* ==========================================================================
+   GLOBAL TOP STAGE NAVIGATION BAR (Irregular Rectangular Toon Bar)
+   ========================================================================== */
 #global-nav {
   position: fixed;
   top: 22px;
@@ -94,38 +97,38 @@ body, html {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
-  background: rgba(255, 252, 248, 0.32);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  border-radius: 999px;
+  padding: 8px 16px;
+  background: #fbf7f2;
+  border: 2px solid #463f4d;
+  box-shadow: 4px 4px 0 #463f4d;
+  /* Funky irregular angular rectangle — zero curves */
+  clip-path: polygon(0% 4%, 100% 0%, 100% 96%, 0% 100%);
 }
 
 .nav-step {
   background: transparent;
-  border: none;
+  border: 1.5px solid transparent;
   font-family: 'Quicksand', sans-serif;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: #5b5263;
-  padding: 6px 13px;
-  border-radius: 999px;
+  padding: 6px 14px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.15s ease;
   letter-spacing: 0.03em;
+  clip-path: polygon(2% 6%, 98% 0%, 100% 94%, 0% 100%);
 }
 
 .nav-step:hover {
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(70, 63, 77, 0.08);
   color: #352f3b;
 }
 
 .nav-step.active {
-  background: rgba(255, 255, 255, 0.82);
-  color: #2f2936;
-  font-weight: 600;
-  box-shadow: 0 2px 10px rgba(70, 60, 82, 0.08);
+  background: #463f4d;
+  color: #fbf7f2;
+  font-weight: 700;
+  box-shadow: 2px 2px 0 #2e2833;
 }
 
 .nav-divider {
@@ -133,10 +136,10 @@ body, html {
   font-size: 14px;
 }
 
-/* Minimal floating text — NO rectangles */
+/* Minimal floating text */
 #thought-text {
   position: fixed;
-  top: 84px;
+  top: 92px;
   left: 50%;
   transform: translateX(-50%) translateY(0);
   z-index: 10;
@@ -149,7 +152,7 @@ body, html {
   pointer-events: none;
   opacity: 1;
   transition: opacity 0.45s ease, transform 0.45s ease;
-  text-shadow: 0 2px 16px rgba(255, 250, 245, 0.85);
+  text-shadow: 0 2px 16px rgba(255, 250, 245, 0.9);
   max-width: min(560px, 86vw);
 }
 
@@ -158,7 +161,9 @@ body, html {
   transform: translateX(-50%) translateY(-6px);
 }
 
-/* Transparent Clickable On-Screen Controls */
+/* ==========================================================================
+   TRANSPARENT CLICKABLE ON-SCREEN CONTROLS (Irregular Rectangles)
+   ========================================================================== */
 #controls-hud {
   position: fixed;
   bottom: 28px;
@@ -167,7 +172,7 @@ body, html {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   transition: opacity 0.35s ease;
 }
 
@@ -177,13 +182,10 @@ body, html {
 }
 
 .ctrl-btn {
-  background: rgba(255, 252, 248, 0.28);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 16px;
+  background: rgba(251, 247, 242, 0.88);
+  border: 2px solid #463f4d;
   min-width: 64px;
-  height: 54px;
+  height: 52px;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -191,19 +193,24 @@ body, html {
   gap: 6px;
   color: #463f4d;
   font-family: 'Quicksand', sans-serif;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(62, 52, 74, 0.06);
-  transition: transform 0.12s ease, background 0.2s ease, opacity 0.25s ease;
+  box-shadow: 3px 3px 0 #463f4d;
+  clip-path: polygon(1% 8%, 99% 0%, 100% 92%, 0% 100%);
+  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.1s ease;
 }
 
 .ctrl-btn:hover {
-  background: rgba(255, 252, 248, 0.48);
+  background: #ffffff;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #463f4d;
 }
 
 .ctrl-btn:active,
 .ctrl-btn.pressed {
-  transform: translateY(2px) scale(0.96);
-  background: rgba(255, 252, 248, 0.78);
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #463f4d;
+  background: #e8e0f2;
 }
 
 .ctrl-btn.ctrl-hidden {
@@ -217,7 +224,7 @@ body, html {
 
 .key-main {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .key-arrow {
@@ -225,7 +232,9 @@ body, html {
   opacity: 0.72;
 }
 
-/* Rectangle ONLY appears during talk with Mr. Cloud */
+/* ==========================================================================
+   DIALOGUE BOX (Irregular Rectangular Toon Card)
+   ========================================================================== */
 #dialogue-box {
   position: fixed;
   bottom: 100px;
@@ -234,12 +243,13 @@ body, html {
   z-index: 25;
   width: min(480px, 88vw);
   background: #fbf7f2;
-  border-radius: 20px;
+  border: 2.5px solid #463f4d;
   padding: 22px 28px;
-  box-shadow: 0 12px 34px rgba(62, 52, 74, 0.09);
+  box-shadow: 5px 5px 0 #463f4d;
+  clip-path: polygon(0.6% 2%, 99.4% 0%, 100% 97%, 98.5% 100%, 0% 98%);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 #dialogue-box.active {
@@ -254,7 +264,7 @@ body, html {
   letter-spacing: 0.14em;
   color: #8e7f96;
   margin-bottom: 6px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 #dialogue-text {
@@ -270,9 +280,12 @@ body, html {
   color: #9b8ea3;
   text-align: right;
   cursor: pointer;
+  font-weight: 700;
 }
 
-/* Stage 4: End Question Overlay */
+/* ==========================================================================
+   STAGE 4: END QUESTION OVERLAY (Irregular Rectangular Card)
+   ========================================================================== */
 #question-overlay {
   position: fixed;
   inset: 0;
@@ -282,7 +295,7 @@ body, html {
   justify-content: center;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.5s ease;
+  transition: opacity 0.4s ease;
 }
 
 #question-overlay.active {
@@ -292,13 +305,11 @@ body, html {
 
 .question-card {
   width: min(520px, 90vw);
-  background: rgba(251, 247, 242, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 24px;
+  background: #fbf7f2;
+  border: 3px solid #463f4d;
   padding: 32px 34px;
-  box-shadow: 0 18px 48px rgba(58, 48, 70, 0.11);
+  box-shadow: 7px 7px 0 #463f4d;
+  clip-path: polygon(0.8% 2%, 99.5% 0%, 100% 97%, 98% 100%, 0% 98.5%);
   text-align: left;
 }
 
@@ -307,13 +318,13 @@ body, html {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: #8e7f96;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 8px;
 }
 
 .question-title {
   font-family: 'Lora', serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 24px;
   color: #352f3b;
   margin-bottom: 10px;
@@ -334,36 +345,43 @@ body, html {
 #violet-input {
   flex: 1;
   user-select: text;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(142, 127, 150, 0.35);
-  border-radius: 14px;
+  background: #ffffff;
+  border: 2px solid #463f4d;
   padding: 12px 16px;
   font-family: 'Quicksand', sans-serif;
   font-size: 15px;
   color: #352f3b;
   outline: none;
-  transition: border-color 0.2s ease;
+  box-shadow: 3px 3px 0 #463f4d;
+  transition: transform 0.1s ease;
 }
 
 #violet-input:focus {
-  border-color: #7c8fd1;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #463f4d;
 }
 
 #violet-submit {
   background: #6f86c9;
   color: #ffffff;
-  border: none;
-  border-radius: 14px;
-  padding: 0 18px;
+  border: 2px solid #463f4d;
+  padding: 0 20px;
   font-family: 'Quicksand', sans-serif;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s ease;
+  box-shadow: 3px 3px 0 #463f4d;
+  transition: transform 0.1s ease, background 0.15s ease;
 }
 
 #violet-submit:hover {
   background: #5d74b8;
+  transform: translate(-1px, -1px);
+}
+
+#violet-submit:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #463f4d;
 }
 
 #violet-feedback {
