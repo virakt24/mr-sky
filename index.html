@@ -3,82 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mr. Sky</title>
+  <title>Mr. Sky — Interactive 2.5D World</title>
+
+  <!-- Friendly Rounded Fonts (Kokuyo-inspired aesthetic) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./css/style.css" />
-</head>
-<body>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
 
-  <!-- 3-Second Minimal Loading Screen -->
-  <div id="loading-screen">
-    <div class="loader-cloud"></div>
-    <p class="loader-text">Loading..</p>
-  </div>
+  <link rel="stylesheet" href="css/style.css" />
 
-  <!-- Global Top Stage Navigation -->
-  <nav id="global-nav" aria-label="Stage Navigation">
-    <button class="nav-step active" data-stage="1">1. Stones</button>
-    <span class="nav-divider">·</span>
-    <button class="nav-step" data-stage="2">2. Balloon</button>
-    <span class="nav-divider">·</span>
-    <button class="nav-step" data-stage="3">3. Mr. Sky</button>
-    <span class="nav-divider">·</span>
-    <button class="nav-step" data-stage="4">4. Why Not Violet?</button>
-  </nav>
-
-  <div id="canvas-container"></div>
-
-  <!-- Short humanlike floating text (NO rectangles) -->
-  <div id="thought-text">hey... ever wonder why the sky is blue?</div>
-
-  <!-- Dialogue Rectangle (ONLY visible when speaking with Mr. Cloud) -->
-  <div id="dialogue-box">
-    <div id="speaker-name">mr. cloud</div>
-    <div id="dialogue-text"></div>
-    <div id="dialogue-next">space or click to continue →</div>
-  </div>
-
-  <!-- Stage 4: End Question Section ("Why is the sky not violet?") -->
-  <div id="question-overlay">
-    <div class="question-card">
-      <div class="question-tag">final curiosity</div>
-      <h2 class="question-title">Why is the sky not violet?</h2>
-      <p class="question-sub">
-        Violet light actually has even shorter, bouncier steps than blue light. So why doesn’t the sky look violet to us?
-      </p>
-      <form id="question-form" autocomplete="off">
-        <input
-          type="text"
-          id="violet-input"
-          placeholder="type your guess here..."
-          maxlength="180"
-          required
-        />
-        <button type="submit" id="violet-submit">share thought →</button>
-      </form>
-      <div id="violet-feedback" class="hidden"></div>
-    </div>
-  </div>
-
-  <!-- Transparent Clickable On-Screen Controls (Context-Sensitive) -->
-  <div id="controls-hud">
-    <button id="btn-left" class="ctrl-btn" aria-label="Move Left">
-      <span class="key-main">A</span>
-      <span class="key-arrow">←</span>
-    </button>
-
-    <button id="btn-space" class="ctrl-btn ctrl-space" aria-label="Jump or Fly">
-      <span class="key-main" id="space-label">SPACE</span>
-    </button>
-
-    <button id="btn-right" class="ctrl-btn" aria-label="Move Right">
-      <span class="key-main">D</span>
-      <span class="key-arrow">→</span>
-    </button>
-  </div>
-
+  <!-- Three.js ES Module Import Map -->
   <script type="importmap">
     {
       "imports": {
@@ -87,7 +21,136 @@
       }
     }
   </script>
+</head>
+<body>
 
-  <script type="module" src="./js/main.js"></script>
+  <!-- SVG Filter for 2.5D Tactile Paper Grain Overlay -->
+  <svg class="svg-defs" aria-hidden="true">
+    <filter id="paper-noise-filter" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch" result="noise" />
+      <feColorMatrix type="matrix" values="
+        1 0 0 0 0
+        0 1 0 0 0
+        0 0 1 0 0
+        0 0 0 0.08 0" in="noise" result="softNoise" />
+      <feBlend mode="multiply" in="SourceGraphic" in2="softNoise" />
+    </filter>
+  </svg>
+
+  <!-- 3D WebGL Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- 2.5D Paper Texture Overlay (Covers 3D & UI softly) -->
+  <div class="paper-overlay" aria-hidden="true"></div>
+
+  <!-- White Outer Border with Rounded Inner Curves -->
+  <div class="viewport-frame" aria-hidden="true"></div>
+
+  <!-- GLOBAL NAVIGATION BAR (Always visible on top) -->
+  <header class="global-navbar" aria-label="Global Navigation">
+    <!-- Left: Question Mark Controls Trigger -->
+    <div class="nav-left">
+      <button id="help-btn" class="help-icon-btn" aria-label="Show Website Controls" aria-expanded="false" title="Controls & Help">
+        <span class="question-mark">?</span>
+      </button>
+      <span class="brand-tag">Mr. Sky</span>
+    </div>
+
+    <!-- Right: 3 Stages + 4 Placeholders -->
+    <nav class="nav-right" aria-label="Stage Navigation">
+      <div class="stage-group">
+        <button class="stage-pill active" data-stage="0">
+          <span class="stage-dot"></span>
+          Starting Stage
+        </button>
+        <button class="stage-pill" data-stage="1">
+          <span class="stage-dot"></span>
+          Balloon Stage
+        </button>
+        <button class="stage-pill" data-stage="2">
+          <span class="stage-dot"></span>
+          Mr. Cloud Stage
+        </button>
+      </div>
+
+      <div class="nav-divider" aria-hidden="true"></div>
+
+      <!-- 4 Placeholders -->
+      <div class="placeholder-group" aria-label="Additional Slots">
+        <button class="placeholder-pill" data-placeholder="1">Placeholder 1</button>
+        <button class="placeholder-pill" data-placeholder="2">Placeholder 2</button>
+        <button class="placeholder-pill" data-placeholder="3">Placeholder 3</button>
+        <button class="placeholder-pill" data-placeholder="4">Placeholder 4</button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- CONTROLS POPOVER / MODAL (Toggled by '?' icon) -->
+  <aside id="controls-modal" class="controls-modal hidden" role="dialog" aria-labelledby="controls-title">
+    <div class="controls-card paper-surface">
+      <div class="controls-header">
+        <h2 id="controls-title">How to Explore</h2>
+        <button id="close-controls-btn" class="close-pill-btn" aria-label="Close Controls">✕</button>
+      </div>
+      <p class="controls-subtitle">Use your keyboard and mouse to stroll through the paper sky world.</p>
+
+      <div class="controls-grid">
+        <div class="control-item">
+          <div class="key-group">
+            <kbd class="key-cap">A</kbd>
+            <kbd class="key-cap">D</kbd>
+          </div>
+          <div class="control-desc">
+            <strong>Move Left & Right</strong>
+            <span>Walk along the sky path between stages</span>
+          </div>
+        </div>
+
+        <div class="control-item">
+          <div class="key-group">
+            <kbd class="key-cap key-wide">Spacebar</kbd>
+          </div>
+          <div class="control-desc">
+            <strong>Jump / Hop</strong>
+            <span>Give the character a cheerful little bounce</span>
+          </div>
+        </div>
+
+        <div class="control-item">
+          <div class="key-group">
+            <span class="mouse-badge">🖱️ Click</span>
+          </div>
+          <div class="control-desc">
+            <strong>Mouse Clicks</strong>
+            <span>Use <em>Prev / Next</em> in speech bubbles & switch stages above</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 3D-ANCHORED SPEECH BUBBLE (Tracks near the Girl in 3D space) -->
+  <div id="girl-dialogue" class="speech-bubble paper-surface" role="region" aria-live="polite">
+    <div class="speech-speaker-badge" id="dialogue-speaker">Mia</div>
+    <p id="dialogue-text" class="speech-text">
+      Hello there! Welcome to our little paper sky world!
+    </p>
+    <div class="speech-footer">
+      <span id="dialogue-step-indicator" class="step-counter">1 / 3</span>
+      <div class="speech-actions">
+        <button id="dialogue-prev-btn" class="dialogue-nav-btn prev-btn" type="button">
+          ← Prev
+        </button>
+        <button id="dialogue-next-btn" class="dialogue-nav-btn next-btn" type="button">
+          Next →
+        </button>
+      </div>
+    </div>
+    <!-- Comic Tail pointing to the Girl -->
+    <div class="speech-tail" aria-hidden="true"></div>
+  </div>
+
+  <!-- Main Application Entry -->
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

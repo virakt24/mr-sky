@@ -1,91 +1,215 @@
 import * as THREE from 'three';
-import {
-  CUSTOM_ASSETS,
-  BALLOON_X,
-  BALLOON_BASE_Y,
-  TARGET_SKY_ALTITUDE,
-  MR_SKY_START_X
-} from './config.js';
-import { scene, loadCustomGLB } from './scene.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { CONFIG } from './config.js';
 
-// ============================================================================
-// 1. CUSTOM GIRL CHARACTER
-// ============================================================================
-export const playerGroup = new THREE.Group();
-scene.add(playerGroup);
+export class Entities {
+  constructor(scene) {
+    this.scene = scene;
+    this.loader = new GLTFLoader();
 
-export const charVisual = new THREE.Group();
-playerGroup.add(charVisual);
+    // Girl root group
+    this.girlGroup = new THREE.Group();
+    this.girlGroup.position.set(0, 0, 0);
+    this.scene.add(this.girlGroup);
 
-export let girlMixer = null;
+    // 3D Anchor point right above/beside the girl's head for her speech bubble
+    this.speechAnchor = new THREE.Object3D();
+    this.speechAnchor.position.set(0, 2.35, 0);
+    this.girlGroup.add(this.speechAnchor);
 
-loadCustomGLB(CUSTOM_ASSETS.girlModelUrl, charVisual, {
-  scale: CUSTOM_ASSETS.girlScale,
-  position: [0, CUSTOM_ASSETS.girlOffsetY, 0],
-  onLoaded: (gltf, model) => {
-    if (gltf.animations && gltf.animations.length > 0) {
-      girlMixer = new THREE.AnimationMixer(model);
-      girlMixer.clipAction(gltf.animations[0]).play();
+    this.girlMixer = null;
+    this.balloonMesh = null;
+
+    // Physics / movement state
+    this.velocityY = 0;
+    this.isGrounded = true;
+    this.targetX = null; // Used when clicking stage buttons in top navbar
+
+    this.loadGirlModel();
+    this.loadBalloonModel();
+  }
+
+  loadGirlModel() {
+    // Immediate cheerful fallback mesh while cutegirl.glb loads
+    const fallbackGroup = new THREE.Group();
+    const bodyGeo = new THREE.CapsuleGeometry(0.38, 0.75, 16, 24);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: '#ff7a59', roughness: 0.8 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.75;
+    body.castShadow = true;
+
+    const headGeo = new THREE.SphereGeometry(0.42, 24, 24);
+    const headMat = new THREE.MeshStandardMaterial({ color: '#ffe3d3', roughness: 0.75 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 1.55;
+    head.castShadow = true;
+
+    fallbackGroup.add(body, head);
+    this.girlGroup.add(fallbackGroup);
+
+    this.loader.load(
+      CONFIG.models.girl,
+      (gltf) => {
+        this.girlGroup.remove(fallbackGroup);
+        const model = gltf.scene;
+
+        // Normalize model size & ground alignment
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) {
+          const scale = 2.0 / maxDim;
+          model.scale.setScalar(scale);
+        }
+
+        const newBox = new THREE.Box3().setFromObject(model);
+        model.position.y = -newBox.min.y;
+
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        this.girlGroup.add(model);
+
+        if (gltf.animations && gltf.animations.length > 0) {
+          this.girlMixer = new THREE.AnimationMixer(model);
+          const action = this.girlMixer.clipAction(gltf.animations[0]);
+          action.play();
+        }
+      },
+      undefined,
+      () => {
+        // Keep fallback character if cutegirl.glb is not found
+      }
+    );
+  }
+
+  loadBalloonModel() {
+    const balloonGroup = new THREE.Group();
+    balloonGroup.position.set(14, 1.2, -1.5);
+    this.scene.add(balloonGroup);
+    this.balloonMesh = balloonGroup;
+
+    // Fallback balloon while Baloon.glb loads
+    const fallbackBalloon = new THREE.Group();
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(1.35, 28, 28),
+      new THREE.MeshStandardMaterial({ color: '#ffd84d', roughness: 0.75 })
+    );
+    bulb.position.y = 2.5;
+    bulb.castShadow = true;
+
+    const basket = new THREE.Mesh(
+      new THREE.BoxGeometry(0.75, 0.55, 0.75),
+      new THREE.MeshStandardMaterial({ color: '#c68b59', roughness: 0.9 })
+    );
+    basket.position.y = 0.6;
+    basket.castShadow = true;
+    fallbackBalloon.add(bulb, basket);
+    balloonGroup.add(fallbackBalloon);
+
+    this.loader.load(
+      CONFIG.models.balloon,
+      (gltf) => {
+        balloonGroup.remove(fallbackBalloon);
+        const model = gltf.scene;
+
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) {
+          const scale = 3.6 / maxDim;
+          model.scale.setScalar(scale);
+        }
+
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        balloonGroup.add(model);
+      },
+      undefined,
+      () => {}
+    );
+  }
+
+  jump() {
+    if (this.isGrounded) {
+      this.velocityY = CONFIG.movement.jumpForce;
+      this.isGrounded = false;
     }
   }
-});
 
-playerGroup.position.set(-4.8, 0.0, 0);
+  moveToTargetX(x) {
+    this.targetX = THREE.MathUtils.clamp(x, CONFIG.movement.minX, CONFIG.movement.maxX);
+  }
 
-// ============================================================================
-// 2. CUSTOM HOT AIR BALLOON
-// ============================================================================
-export const balloonGroup = new THREE.Group();
-balloonGroup.position.set(BALLOON_X, BALLOON_BASE_Y, 0);
-scene.add(balloonGroup);
+  update(delta, elapsedTime, keys) {
+    if (this.girlMixer) {
+      this.girlMixer.update(delta);
+    }
 
-export const balloonRig = new THREE.Group();
-balloonGroup.add(balloonRig);
+    // Keyboard A & D movement overrides auto-walk target
+    let moveDir = 0;
+    if (keys.left) moveDir -= 1;
+    if (keys.right) moveDir += 1;
 
-loadCustomGLB(CUSTOM_ASSETS.balloonModelUrl, balloonRig, {
-  scale: CUSTOM_ASSETS.balloonScale,
-  position: [0, CUSTOM_ASSETS.balloonOffsetY, 0]
-});
+    if (moveDir !== 0) {
+      this.targetX = null;
+      this.girlGroup.position.x += moveDir * CONFIG.movement.walkSpeed * delta;
+      this.girlGroup.position.x = THREE.MathUtils.clamp(
+        this.girlGroup.position.x,
+        CONFIG.movement.minX,
+        CONFIG.movement.maxX
+      );
+      // Turn girl slightly toward movement direction
+      const targetRotY = moveDir > 0 ? Math.PI * 0.22 : -Math.PI * 0.22;
+      this.girlGroup.rotation.y = THREE.MathUtils.lerp(this.girlGroup.rotation.y, targetRotY, 0.15);
+    } else if (this.targetX !== null) {
+      const diff = this.targetX - this.girlGroup.position.x;
+      if (Math.abs(diff) > 0.12) {
+        const dir = Math.sign(diff);
+        this.girlGroup.position.x += dir * CONFIG.movement.walkSpeed * 1.15 * delta;
+        const targetRotY = dir > 0 ? Math.PI * 0.22 : -Math.PI * 0.22;
+        this.girlGroup.rotation.y = THREE.MathUtils.lerp(this.girlGroup.rotation.y, targetRotY, 0.15);
+      } else {
+        this.girlGroup.position.x = this.targetX;
+        this.targetX = null;
+      }
+    } else {
+      // Face camera warmly when idle
+      this.girlGroup.rotation.y = THREE.MathUtils.lerp(this.girlGroup.rotation.y, 0, 0.12);
+    }
 
-// ============================================================================
-// 3. SIMPLE MR. CLOUD (GRAY -> BLUE, FADES OUT AT STAGE 4)
-// ============================================================================
-export const mrSkyGroup = new THREE.Group();
-mrSkyGroup.position.set(MR_SKY_START_X, TARGET_SKY_ALTITUDE + 0.15, 0);
-scene.add(mrSkyGroup);
+    // Jump & Gravity physics
+    if (!this.isGrounded) {
+      this.girlGroup.position.y += this.velocityY * delta;
+      this.velocityY -= CONFIG.movement.gravity * delta;
 
-export const mrSkyRig = new THREE.Group();
-mrSkyGroup.add(mrSkyRig);
+      if (this.girlGroup.position.y <= 0) {
+        this.girlGroup.position.y = 0;
+        this.velocityY = 0;
+        this.isGrounded = true;
+      }
+    }
 
-export const mrCloudColorGray = new THREE.Color('#9ea4ad');
-export const mrCloudColorBlue = new THREE.Color('#5cb3f5');
+    // Gentle floating motion for Balloon Stage
+    if (this.balloonMesh) {
+      this.balloonMesh.position.y = 1.2 + Math.sin(elapsedTime * 1.5) * 0.35;
+      this.balloonMesh.rotation.y = Math.sin(elapsedTime * 0.6) * 0.15;
+    }
+  }
 
-export const mrCloudMat = new THREE.MeshLambertMaterial({
-  color: mrCloudColorGray.clone(),
-  transparent: true,
-  opacity: 1.0
-});
-
-const centerPuff = new THREE.Mesh(new THREE.SphereGeometry(1.35, 64, 64), mrCloudMat);
-centerPuff.scale.set(1.3, 0.78, 0.95);
-
-const sideLeft = new THREE.Mesh(new THREE.SphereGeometry(0.95, 64, 64), mrCloudMat);
-sideLeft.position.set(-1.15, -0.12, 0);
-
-const sideRight = new THREE.Mesh(new THREE.SphereGeometry(0.95, 64, 64), mrCloudMat);
-sideRight.position.set(1.15, -0.12, 0);
-
-mrSkyRig.add(centerPuff, sideLeft, sideRight);
-
-export const mrCloudEyeMat = new THREE.MeshBasicMaterial({
-  color: '#333842',
-  transparent: true,
-  opacity: 1.0
-});
-const eyeGeo = new THREE.SphereGeometry(0.08, 24, 24);
-const eyeL = new THREE.Mesh(eyeGeo, mrCloudEyeMat);
-eyeL.position.set(-0.32, 0.12, 1.24);
-
-const eyeR = new THREE.Mesh(eyeGeo, mrCloudEyeMat);
-eyeR.position.set(0.32, 0.12, 1.24);
-mrSkyRig.add(eyeL, eyeR);
+  getSpeechWorldPosition(targetVec) {
+    this.speechAnchor.getWorldPosition(targetVec);
+    return targetVec;
+  }
+}
