@@ -4,7 +4,6 @@ export function createScene() {
   const container = document.getElementById('canvas-container');
 
   const scene = new THREE.Scene();
-  // Warm paper-sky background tone
   scene.background = new THREE.Color('#d8eef8');
   scene.fog = new THREE.FogExp2('#d8eef8', 0.015);
 
@@ -14,7 +13,9 @@ export function createScene() {
     0.1,
     250
   );
-  camera.position.set(0, 3.4, 9.5);
+  // Start zoomed-in right in front of the character on the horizon line
+  camera.position.set(0, 1.45, 4.2);
+  camera.lookAt(0, 1.4, 0);
 
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -31,7 +32,6 @@ export function createScene() {
   container.innerHTML = '';
   container.appendChild(renderer.domElement);
 
-  // Soft warm hemisphere + directional lighting for a 2.5D craft feel (not cel-shaded)
   const hemiLight = new THREE.HemisphereLight('#fffdf5', '#c9d6df', 1.35);
   hemiLight.position.set(0, 25, 0);
   scene.add(hemiLight);

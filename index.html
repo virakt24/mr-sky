@@ -40,13 +40,13 @@
   <!-- 3D WebGL Canvas Container -->
   <div id="canvas-container"></div>
 
-  <!-- 2.5D Paper Texture Overlay (Covers 3D & UI softly) -->
+  <!-- 2.5D Paper Texture Overlay -->
   <div class="paper-overlay" aria-hidden="true"></div>
 
   <!-- White Outer Border with Rounded Inner Curves -->
   <div class="viewport-frame" aria-hidden="true"></div>
 
-  <!-- GLOBAL NAVIGATION BAR (Always visible on top) -->
+  <!-- GLOBAL NAVIGATION BAR -->
   <header class="global-navbar" aria-label="Global Navigation">
     <!-- Left: Question Mark Controls Trigger -->
     <div class="nav-left">
@@ -56,7 +56,7 @@
       <span class="brand-tag">Mr. Sky</span>
     </div>
 
-    <!-- Right: 3 Stages + 4 Placeholders -->
+    <!-- Right: 3 Stages + 4 Placeholders (Placeholders hidden until Mr. Cloud Stage is clicked) -->
     <nav class="nav-right" aria-label="Stage Navigation">
       <div class="stage-group">
         <button class="stage-pill active" data-stage="0">
@@ -73,10 +73,10 @@
         </button>
       </div>
 
-      <div class="nav-divider" aria-hidden="true"></div>
+      <div id="nav-divider" class="nav-divider hidden-nav" aria-hidden="true"></div>
 
-      <!-- 4 Placeholders -->
-      <div class="placeholder-group" aria-label="Additional Slots">
+      <!-- 4 Placeholders (Shown only when Mr. Cloud Stage is clicked) -->
+      <div id="placeholder-group" class="placeholder-group hidden-nav" aria-label="Additional Slots">
         <button class="placeholder-pill" data-placeholder="1">Placeholder 1</button>
         <button class="placeholder-pill" data-placeholder="2">Placeholder 2</button>
         <button class="placeholder-pill" data-placeholder="3">Placeholder 3</button>
@@ -102,7 +102,7 @@
           </div>
           <div class="control-desc">
             <strong>Move Left & Right</strong>
-            <span>Walk along the sky path between stages</span>
+            <span>Unlocks right after the intro</span>
           </div>
         </div>
 
@@ -129,7 +129,7 @@
     </div>
   </aside>
 
-  <!-- 3D-ANCHORED SPEECH BUBBLE (Tracks near the Girl in 3D space) -->
+  <!-- 3D-ANCHORED SPEECH BUBBLE (Only Prev and Next inside) -->
   <div id="girl-dialogue" class="speech-bubble paper-surface" role="region" aria-live="polite">
     <div class="speech-speaker-badge" id="dialogue-speaker">Mia</div>
     <p id="dialogue-text" class="speech-text">
@@ -146,8 +146,18 @@
         </button>
       </div>
     </div>
-    <!-- Comic Tail pointing to the Girl -->
+    <!-- 2D Pointer Tail pointing to the Girl -->
     <div class="speech-tail" aria-hidden="true"></div>
+  </div>
+
+  <!-- BOTTOM-RIGHT CONTROLS: REPLAY & SKIP -->
+  <div class="bottom-right-controls" aria-label="Dialogue Controls">
+    <button id="replay-btn" class="utility-pill-btn replay-btn" type="button">
+      ↻ Replay
+    </button>
+    <button id="skip-btn" class="utility-pill-btn skip-btn" type="button">
+      Skip ⏭
+    </button>
   </div>
 
   <!-- Main Application Entry -->

@@ -6,6 +6,24 @@ export const CONFIG = {
     rocks: './rocks.glb'
   },
 
+  // Horizon-line zoomed-in intro camera vs. unlocked world camera
+  cameraViews: {
+    intro: {
+      xOffset: 0,
+      y: 1.45,
+      z: 4.2,
+      lookAtXOffset: 0,
+      lookAtY: 1.4
+    },
+    world: {
+      xOffset: 1.2,
+      y: 2.3,
+      z: 9.2,
+      lookAtXOffset: 0.7,
+      lookAtY: 1.4
+    }
+  },
+
   movement: {
     walkSpeed: 7.5,
     jumpForce: 8.5,
@@ -20,36 +38,33 @@ export const CONFIG = {
       id: 0,
       name: 'Starting Stage',
       targetX: 0,
-      cameraOffset: { x: 0, y: 3.4, z: 9.5 },
       speaker: 'Mia',
       dialogues: [
         'Hello everyone! Welcome to our paper sky world! 👋',
         'Use A and D on your keyboard to walk around, or press Spacebar to hop!',
-        'Click Next or Prev right here in my dialogue box, or pick a stage on the top bar!'
+        'Click Next to finish the intro and start exploring the world!'
       ]
     },
     {
       id: 1,
       name: 'Balloon Stage',
       targetX: 14,
-      cameraOffset: { x: 0, y: 4.0, z: 10.5 },
       speaker: 'Mia',
       dialogues: [
         'Look! Here is the Balloon Stage floating gently in the breeze.',
         'It carries letters and sketches all the way up to the high clouds.',
-        'Ready to visit Mr. Cloud next? Walk right with D or click Next!'
+        'Ready to visit Mr. Cloud next? Walk right with D or click Mr. Cloud Stage above!'
       ]
     },
     {
       id: 2,
       name: 'Mr. Cloud Stage',
       targetX: 28,
-      cameraOffset: { x: 0, y: 3.8, z: 10.0 },
       speaker: 'Mia & Mr. Cloud',
       dialogues: [
         'Say hi to Mr. Cloud! He is the fluffiest daydreamer in the sky.',
         'Every cloud here feels like soft stationery paper folded by hand.',
-        'You can also check out the 4 placeholder spots in the top right navigation!'
+        'Now you can also click on Placeholders 1, 2, 3, and 4 in the top right bar!'
       ]
     }
   ],

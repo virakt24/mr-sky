@@ -8,11 +8,13 @@ const { scene, camera, renderer } = createScene();
 const world = new World(scene);
 const entities = new Entities(scene);
 
-// Keyboard state (A, D, Spacebar)
+// Keyboard state (A, D, Spacebar) — locked until introCompleted is true
 const keys = {
   left: false,
   right: false
 };
+
+let introCompleted = false;
 
 // Active Stage & Dialogue State
 let activeStageIndex = 0;
@@ -28,6 +30,8 @@ const closeControlsBtn = document.getElementById('close-controls-btn');
 
 const stagePills = document.querySelectorAll('.stage-pill');
 const placeholderPills = document.querySelectorAll('.placeholder-pill');
+const navDivider = document.getElementById('nav-divider');
+const placeholderGroup = document.getElementById('placeholder-group');
 
 const speechBubble = document.getElementById('girl-dialogue');
 const speakerEl = document.getElementById('dialogue-speaker');
@@ -36,8 +40,11 @@ const stepIndicatorEl = document.getElementById('dialogue-step-indicator');
 const prevBtn = document.getElementById('dialogue-prev-btn');
 const nextBtn = document.getElementById('dialogue-next-btn');
 
+const replayBtn = document.getElementById('replay-btn');
+const skipBtn = document.getElementById('skip-btn');
+
 // =========================================================
-// 1. DIALOGUE BOX LOGIC (Controlled by Mouse Prev / Next)
+// 1. DIALOGUE BOX LOGIC (Only Prev & Next — No Replay Inside)
 // =========================================================
 function renderDialogue() {
   speakerEl.textContent = currentSpeaker;
@@ -45,14 +52,16 @@ function renderDialogue() {
   stepIndicatorEl.textContent = `${currentLineIndex + 1} / ${currentDialogues.length}`;
 
   prevBtn.disabled = currentLineIndex === 0;
+  nextBtn.textContent = 'Next →';
 
-  if (currentLineIndex === currentDialogues.length - 1) {
-    nextBtn.textContent = activeStageIndex < CONFIG.stages.length - 1 && !activePlaceholderId
-      ? 'Next Stage →'
-      : 'Replay ↻';
-  } else {
-    nextBtn.textContent = 'Next →';
-  }
+  // Disable Next button only if already at the last line AND intro is already finished
+  const isLastLine = currentLineIndex === currentDialogues.length - 1;
+  nextBtn.disabled = isLastLine && introCompleted;
+}
+
+function finishIntro() {
+  introCompleted = true;
+  renderDialogue();
 }
 
 prevBtn.addEventListener('click', (e) => {
@@ -68,19 +77,36 @@ nextBtn.addEventListener('click', (e) => {
   if (currentLineIndex < currentDialogues.length - 1) {
     currentLineIndex++;
     renderDialogue();
-  } else {
-    // If on the final line of a main stage, smoothly advance to the next stage
-    if (!activePlaceholderId && activeStageIndex < CONFIG.stages.length - 1) {
-      selectStage(activeStageIndex + 1);
-    } else {
-      currentLineIndex = 0;
-      renderDialogue();
-    }
+  } else if (!introCompleted) {
+    // Clicking Next on the final intro line unlocks world movement and zooms camera out
+    finishIntro();
   }
 });
 
 // =========================================================
-// 2. GLOBAL NAVBAR: STAGES & 4 PLACEHOLDERS
+// 2. BOTTOM-RIGHT REPLAY & SKIP BUTTONS
+// =========================================================
+replayBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  currentLineIndex = 0;
+  // If replaying at the Starting Stage, zoom back in for the intro
+  if (activeStageIndex === 0 && activePlaceholderId === null) {
+    introCompleted = false;
+    keys.left = false;
+    keys.right = false;
+    entities.moveToTargetX(0);
+  }
+  renderDialogue();
+});
+
+skipBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  currentLineIndex = currentDialogues.length - 1;
+  finishIntro();
+});
+
+// =========================================================
+// 3. GLOBAL NAVBAR: STAGES & CONDITIONAL 4 PLACEHOLDERS
 // =========================================================
 function updateNavHighlight() {
   stagePills.forEach((btn) => {
@@ -92,11 +118,21 @@ function updateNavHighlight() {
     const pid = Number(btn.dataset.placeholder);
     btn.classList.toggle('active', activePlaceholderId === pid);
   });
+
+  // Show Placeholders 1, 2, 3, and 4 ONLY when Mr. Cloud Stage (index 2) or a placeholder is active
+  const showPlaceholders = activeStageIndex === 2 || activePlaceholderId !== null;
+  navDivider.classList.toggle('hidden-nav', !showPlaceholders);
+  placeholderGroup.classList.toggle('hidden-nav', !showPlaceholders);
 }
 
 function selectStage(stageIdx, moveCharacter = true) {
   const stage = CONFIG.stages[stageIdx];
   if (!stage) return;
+
+  // Selecting a stage unlocks world view if still in intro
+  if (stageIdx !== 0) {
+    introCompleted = true;
+  }
 
   activeStageIndex = stageIdx;
   activePlaceholderId = null;
@@ -116,6 +152,8 @@ function selectPlaceholder(placeholderId) {
   const slot = CONFIG.placeholders[placeholderId];
   if (!slot) return;
 
+  introCompleted = true;
+  activeStageIndex = 2; // Keep Mr. Cloud context active so placeholders stay visible
   activePlaceholderId = placeholderId;
   currentDialogues = [...slot.dialogues];
   currentSpeaker = slot.speaker;
@@ -141,7 +179,7 @@ placeholderPills.forEach((btn) => {
 });
 
 // =========================================================
-// 3. QUESTION MARK ('?') CONTROLS MODAL
+// 4. QUESTION MARK ('?') CONTROLS MODAL
 // =========================================================
 function toggleControlsModal(forceState) {
   const isHidden = controlsModal.classList.contains('hidden');
@@ -167,9 +205,11 @@ window.addEventListener('click', (e) => {
 });
 
 // =========================================================
-// 4. KEYBOARD CONTROLS (A, D, SPACEBAR)
+// 5. KEYBOARD CONTROLS (Locked Until Intro Finishes)
 // =========================================================
 window.addEventListener('keydown', (e) => {
+  if (!introCompleted) return; // Block A, D, and Spacebar until after introduction
+
   const code = e.code;
   if (code === 'KeyA' || code === 'ArrowLeft') {
     keys.left = true;
@@ -191,7 +231,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 // =========================================================
-// 5. ANCHOR SPEECH BUBBLE NEAR THE GIRL IN SCREEN SPACE
+// 6. ANCHOR SPEECH BUBBLE NEAR THE GIRL IN SCREEN SPACE
 // =========================================================
 const anchorWorldPos = new THREE.Vector3();
 
@@ -202,14 +242,12 @@ function updateSpeechBubblePosition() {
   const halfW = window.innerWidth / 2;
   const halfH = window.innerHeight / 2;
 
-  // Convert normalized device coordinates (-1 to 1) to screen pixels
   let screenX = anchorWorldPos.x * halfW + halfW + 75;
   let screenY = -(anchorWorldPos.y * halfH) + halfH - 18;
 
-  // Keep the bubble safely inside the inner-curved white border
   const padX = 190;
   const padTop = 105;
-  const padBottom = 60;
+  const padBottom = 80;
 
   screenX = THREE.MathUtils.clamp(screenX, padX, window.innerWidth - padX);
   screenY = THREE.MathUtils.clamp(screenY, padTop, window.innerHeight - padBottom);
@@ -220,7 +258,7 @@ function updateSpeechBubblePosition() {
 
 // Automatically sync active stage badge if user walks with A & D
 function checkProximityStageSync() {
-  if (entities.targetX !== null || activePlaceholderId !== null) return;
+  if (!introCompleted || entities.targetX !== null || activePlaceholderId !== null) return;
 
   const girlX = entities.girlGroup.position.x;
   let closestIdx = activeStageIndex;
@@ -240,11 +278,14 @@ function checkProximityStageSync() {
 }
 
 // =========================================================
-// 6. MAIN RENDER LOOP
+// 7. MAIN RENDER LOOP
 // =========================================================
+updateNavHighlight();
 renderDialogue();
+
 const clock = new THREE.Clock();
 let prevTime = 0;
+const currentLookAt = new THREE.Vector3(0, CONFIG.cameraViews.intro.lookAtY, 0);
 
 function animate() {
   requestAnimationFrame(animate);
@@ -257,14 +298,23 @@ function animate() {
   world.update(elapsedTime);
   checkProximityStageSync();
 
-  // Smooth camera tracking along the girl's X position
-  const desiredCamX = entities.girlGroup.position.x + 1.2;
-  camera.position.x = THREE.MathUtils.lerp(camera.position.x, desiredCamX, 0.08);
-  camera.lookAt(camera.position.x - 0.5, 1.4, 0);
+  const girlX = entities.girlGroup.position.x;
+  const view = introCompleted ? CONFIG.cameraViews.world : CONFIG.cameraViews.intro;
+
+  // Smoothly interpolate camera position between horizon-line intro zoom and world view
+  const desiredCamX = girlX + view.xOffset;
+  camera.position.x = THREE.MathUtils.lerp(camera.position.x, desiredCamX, 0.07);
+  camera.position.y = THREE.MathUtils.lerp(camera.position.y, view.y, 0.07);
+  camera.position.z = THREE.MathUtils.lerp(camera.position.z, view.z, 0.07);
+
+  const targetLookX = girlX + view.lookAtXOffset;
+  currentLookAt.x = THREE.MathUtils.lerp(currentLookAt.x, targetLookX, 0.08);
+  currentLookAt.y = THREE.MathUtils.lerp(currentLookAt.y, view.lookAtY, 0.08);
+  camera.lookAt(currentLookAt.x, currentLookAt.y, 0);
 
   renderer.render(scene, camera);
 
-  // Project girl's 3D position to keep her speech bubble right next to her
+  // Keep speech bubble anchored right beside the girl
   updateSpeechBubblePosition();
 }
 
