@@ -1,3 +1,5 @@
+// js/entities.js
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG } from './config.js';
@@ -7,209 +9,326 @@ export class Entities {
     this.scene = scene;
     this.loader = new GLTFLoader();
 
-    // Girl root group
-    this.girlGroup = new THREE.Group();
-    this.girlGroup.position.set(0, 0, 0);
-    this.scene.add(this.girlGroup);
-
-    // 3D Anchor point right above/beside the girl's head for her speech bubble
-    this.speechAnchor = new THREE.Object3D();
-    this.speechAnchor.position.set(0, 2.35, 0);
-    this.girlGroup.add(this.speechAnchor);
-
-    this.girlMixer = null;
-    this.balloonMesh = null;
-
-    // Physics / movement state
-    this.velocityY = 0;
+    // Girl character state
+    this.girl = null;
+    this.mixer = null;
+    this.actions = {};
+    this.activeActionName = null;
+    this.velocity = new THREE.Vector3();
     this.isGrounded = true;
-    this.targetX = null; // Used when clicking stage buttons in top navbar
 
-    this.loadGirlModel();
-    this.loadBalloonModel();
+    // Balloon state
+    this.balloon = null;
+    this.balloonAscentVelocity = 0;
+
+    // Cloud hop interpolation state
+    this.hopData = {
+      elapsed: 0,
+      startPos: new THREE.Vector3(),
+      endPos: new THREE.Vector3()
+    };
   }
 
-  loadGirlModel() {
-    // Immediate cheerful fallback mesh while cutegirl.glb loads
-    const fallbackGroup = new THREE.Group();
-    const bodyGeo = new THREE.CapsuleGeometry(0.38, 0.75, 16, 24);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: '#ff7a59', roughness: 0.8 });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.75;
-    body.castShadow = true;
+  async init() {
+    await Promise.all([this.loadGirl(), this.loadBalloon()]);
+  }
 
-    const headGeo = new THREE.SphereGeometry(0.42, 24, 24);
-    const headMat = new THREE.MeshStandardMaterial({ color: '#ffe3d3', roughness: 0.75 });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = 1.55;
-    head.castShadow = true;
+  loadGirl() {
+    return new Promise((resolve, reject) => {
+      this.loader.load(
+        CONFIG.assets.girl,
+        (gltf) => {
+          this.girl = gltf.scene;
+          const { initialPosition, initialRotationY } = CONFIG.intro;
+          this.girl.position.set(
+            initialPosition.x,
+            initialPosition.y,
+            initialPosition.z
+          );
+          this.girl.rotation.y = initialRotationY;
+          this.scene.add(this.girl);
 
-    fallbackGroup.add(body, head);
-    this.girlGroup.add(fallbackGroup);
-
-    this.loader.load(
-      CONFIG.models.girl,
-      (gltf) => {
-        this.girlGroup.remove(fallbackGroup);
-        const model = gltf.scene;
-
-        // Normalize model size & ground alignment
-        const box = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        if (maxDim > 0) {
-          const scale = 2.0 / maxDim;
-          model.scale.setScalar(scale);
-        }
-
-        const newBox = new THREE.Box3().setFromObject(model);
-        model.position.y = -newBox.min.y;
-
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
+          if (gltf.animations && gltf.animations.length > 0) {
+            this.mixer = new THREE.AnimationMixer(this.girl);
+            gltf.animations.forEach((clip) => {
+              const name = clip.name.toLowerCase();
+              this.actions[name] = this.mixer.clipAction(clip);
+            });
+            this.playAnimation('idle');
           }
-        });
-
-        this.girlGroup.add(model);
-
-        if (gltf.animations && gltf.animations.length > 0) {
-          this.girlMixer = new THREE.AnimationMixer(model);
-          const action = this.girlMixer.clipAction(gltf.animations[0]);
-          action.play();
-        }
-      },
-      undefined,
-      () => {
-        // Keep fallback character if cutegirl.glb is not found
-      }
-    );
-  }
-
-  loadBalloonModel() {
-    const balloonGroup = new THREE.Group();
-    balloonGroup.position.set(14, 1.2, -1.5);
-    this.scene.add(balloonGroup);
-    this.balloonMesh = balloonGroup;
-
-    // Fallback balloon while Baloon.glb loads
-    const fallbackBalloon = new THREE.Group();
-    const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(1.35, 28, 28),
-      new THREE.MeshStandardMaterial({ color: '#ffd84d', roughness: 0.75 })
-    );
-    bulb.position.y = 2.5;
-    bulb.castShadow = true;
-
-    const basket = new THREE.Mesh(
-      new THREE.BoxGeometry(0.75, 0.55, 0.75),
-      new THREE.MeshStandardMaterial({ color: '#c68b59', roughness: 0.9 })
-    );
-    basket.position.y = 0.6;
-    basket.castShadow = true;
-    fallbackBalloon.add(bulb, basket);
-    balloonGroup.add(fallbackBalloon);
-
-    this.loader.load(
-      CONFIG.models.balloon,
-      (gltf) => {
-        balloonGroup.remove(fallbackBalloon);
-        const model = gltf.scene;
-
-        const box = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        if (maxDim > 0) {
-          const scale = 3.6 / maxDim;
-          model.scale.setScalar(scale);
-        }
-
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-
-        balloonGroup.add(model);
-      },
-      undefined,
-      () => {}
-    );
-  }
-
-  jump() {
-    if (this.isGrounded) {
-      this.velocityY = CONFIG.movement.jumpForce;
-      this.isGrounded = false;
-    }
-  }
-
-  moveToTargetX(x) {
-    this.targetX = THREE.MathUtils.clamp(x, CONFIG.movement.minX, CONFIG.movement.maxX);
-  }
-
-  update(delta, elapsedTime, keys) {
-    if (this.girlMixer) {
-      this.girlMixer.update(delta);
-    }
-
-    // Keyboard A & D movement overrides auto-walk target
-    let moveDir = 0;
-    if (keys.left) moveDir -= 1;
-    if (keys.right) moveDir += 1;
-
-    if (moveDir !== 0) {
-      this.targetX = null;
-      this.girlGroup.position.x += moveDir * CONFIG.movement.walkSpeed * delta;
-      this.girlGroup.position.x = THREE.MathUtils.clamp(
-        this.girlGroup.position.x,
-        CONFIG.movement.minX,
-        CONFIG.movement.maxX
+          resolve(this.girl);
+        },
+        undefined,
+        reject
       );
-      // Turn girl slightly toward movement direction
-      const targetRotY = moveDir > 0 ? Math.PI * 0.22 : -Math.PI * 0.22;
-      this.girlGroup.rotation.y = THREE.MathUtils.lerp(this.girlGroup.rotation.y, targetRotY, 0.15);
-    } else if (this.targetX !== null) {
-      const diff = this.targetX - this.girlGroup.position.x;
-      if (Math.abs(diff) > 0.12) {
-        const dir = Math.sign(diff);
-        this.girlGroup.position.x += dir * CONFIG.movement.walkSpeed * 1.15 * delta;
-        const targetRotY = dir > 0 ? Math.PI * 0.22 : -Math.PI * 0.22;
-        this.girlGroup.rotation.y = THREE.MathUtils.lerp(this.girlGroup.rotation.y, targetRotY, 0.15);
-      } else {
-        this.girlGroup.position.x = this.targetX;
-        this.targetX = null;
-      }
-    } else {
-      // Face camera warmly when idle
-      this.girlGroup.rotation.y = THREE.MathUtils.lerp(this.girlGroup.rotation.y, 0, 0.12);
+    });
+  }
+
+  loadBalloon() {
+    return new Promise((resolve, reject) => {
+      this.loader.load(
+        CONFIG.assets.balloon,
+        (gltf) => {
+          this.balloon = gltf.scene;
+          const { initialPosition } = CONFIG.balloon;
+          this.balloon.position.set(
+            initialPosition.x,
+            initialPosition.y,
+            initialPosition.z
+          );
+          this.scene.add(this.balloon);
+          resolve(this.balloon);
+        },
+        undefined,
+        reject
+      );
+    });
+  }
+
+  playAnimation(keyword, loopOnce = false) {
+    if (!this.mixer) return;
+    const keys = Object.keys(this.actions);
+    if (keys.length === 0) return;
+
+    const matchKey =
+      keys.find((k) => k.includes(keyword)) || keys[0];
+
+    if (this.activeActionName === matchKey) return;
+
+    const nextAction = this.actions[matchKey];
+    const prevAction = this.actions[this.activeActionName];
+
+    if (prevAction) {
+      prevAction.fadeOut(0.2);
     }
 
-    // Jump & Gravity physics
-    if (!this.isGrounded) {
-      this.girlGroup.position.y += this.velocityY * delta;
-      this.velocityY -= CONFIG.movement.gravity * delta;
+    nextAction.reset();
+    if (loopOnce) {
+      nextAction.setLoop(THREE.LoopOnce, 1);
+      nextAction.clampWhenFinished = true;
+    } else {
+      nextAction.setLoop(THREE.LoopRepeat);
+    }
+    nextAction.fadeIn(0.2).play();
+    this.activeActionName = matchKey;
+  }
 
-      if (this.girlGroup.position.y <= 0) {
-        this.girlGroup.position.y = 0;
-        this.velocityY = 0;
+  // Step 1: Update movement & jumping across invisible blocks
+  updateJumpPathMovement(dt, keys, world) {
+    if (!this.girl) return false;
+
+    const moveDir = new THREE.Vector3();
+    if (keys.d || keys.arrowRight) moveDir.x += 1;
+    if (keys.a || keys.arrowLeft) moveDir.x -= 1;
+    if (keys.w || keys.arrowUp) moveDir.z -= 1;
+    if (keys.s || keys.arrowDown) moveDir.z += 1;
+
+    if (moveDir.lengthSq() > 0) {
+      moveDir.normalize();
+      this.girl.position.x += moveDir.x * CONFIG.player.moveSpeed * dt;
+      this.girl.position.z += moveDir.z * CONFIG.player.moveSpeed * dt;
+      this.girl.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+
+      if (this.isGrounded) {
+        this.playAnimation('walk');
+      }
+    } else if (this.isGrounded) {
+      this.playAnimation('idle');
+    }
+
+    // Jump trigger
+    if (keys.space && this.isGrounded) {
+      this.velocity.y = CONFIG.player.jumpForce;
+      this.isGrounded = false;
+      this.playAnimation('jump');
+    }
+
+    // Apply gravity
+    const prevY = this.girl.position.y;
+    this.velocity.y += CONFIG.player.gravity * dt;
+    this.girl.position.y += this.velocity.y * dt;
+
+    let landed = false;
+
+    // Collide with invisible blocks on downward motion
+    if (this.velocity.y <= 0) {
+      for (const collider of world.invisibleColliders) {
+        const { min, max } = collider.box;
+        const withinXZ =
+          this.girl.position.x + CONFIG.player.radius >= min.x &&
+          this.girl.position.x - CONFIG.player.radius <= max.x &&
+          this.girl.position.z + CONFIG.player.radius >= min.z &&
+          this.girl.position.z - CONFIG.player.radius <= max.z;
+
+        if (
+          withinXZ &&
+          prevY >= collider.topY - 0.15 &&
+          this.girl.position.y <= collider.topY
+        ) {
+          this.girl.position.y = collider.topY;
+          this.velocity.y = 0;
+          this.isGrounded = true;
+          landed = true;
+          break;
+        }
+      }
+    }
+
+    // Base ground collision & fall reset
+    if (!landed) {
+      if (
+        this.girl.position.x < 1.2 &&
+        this.girl.position.y <= CONFIG.player.groundY
+      ) {
+        this.girl.position.y = CONFIG.player.groundY;
+        this.velocity.y = 0;
+        this.isGrounded = true;
+      } else if (this.girl.position.y < CONFIG.player.fallResetY) {
+        // Respawn at start if the player misses an invisible block
+        const { initialPosition } = CONFIG.intro;
+        this.girl.position.set(
+          initialPosition.x,
+          initialPosition.y,
+          initialPosition.z
+        );
+        this.velocity.set(0, 0, 0);
         this.isGrounded = true;
       }
     }
 
-    // Gentle floating motion for Balloon Stage
-    if (this.balloonMesh) {
-      this.balloonMesh.position.y = 1.2 + Math.sin(elapsedTime * 1.5) * 0.35;
-      this.balloonMesh.rotation.y = Math.sin(elapsedTime * 0.6) * 0.15;
+    // Check if player reached the balloon basket
+    if (this.balloon) {
+      const basketWorldPos = this.getBasketWorldPosition();
+      const distToBasket = this.girl.position.distanceTo(basketWorldPos);
+      if (distToBasket <= CONFIG.balloon.entryTriggerRadius) {
+        this.enterBalloonBasket();
+        return true; // Reached basket
+      }
     }
+
+    return false;
   }
 
-  getSpeechWorldPosition(targetVec) {
-    this.speechAnchor.getWorldPosition(targetVec);
-    return targetVec;
+  getBasketWorldPosition() {
+    const { basketOffset } = CONFIG.balloon;
+    return new THREE.Vector3(
+      this.balloon.position.x + basketOffset.x,
+      this.balloon.position.y + basketOffset.y,
+      this.balloon.position.z + basketOffset.z
+    );
+  }
+
+  enterBalloonBasket() {
+    this.velocity.set(0, 0, 0);
+    this.isGrounded = true;
+    const basketPos = this.getBasketWorldPosition();
+    this.girl.position.copy(basketPos);
+    this.girl.rotation.y = Math.PI * 0.5;
+    this.playAnimation('idle');
+  }
+
+  // Step 2: Smoothly ascend while Space is held
+  updateBalloonAscent(dt, keys) {
+    if (!this.balloon || !this.girl) return false;
+
+    const targetVel = keys.space ? CONFIG.balloon.ascentSpeed : 0;
+    this.balloonAscentVelocity = THREE.MathUtils.lerp(
+      this.balloonAscentVelocity,
+      targetVel,
+      CONFIG.balloon.ascentDamping * dt
+    );
+
+    this.balloon.position.y += this.balloonAscentVelocity * dt;
+
+    // Clamp at target sky altitude
+    if (this.balloon.position.y >= CONFIG.balloon.targetSkyY) {
+      this.balloon.position.y = CONFIG.balloon.targetSkyY;
+      this.balloonAscentVelocity = 0;
+      this.syncGirlWithBasket();
+      return true; // Reached target sky height
+    }
+
+    this.syncGirlWithBasket();
+    return false;
+  }
+
+  syncGirlWithBasket() {
+    const basketPos = this.getBasketWorldPosition();
+    this.girl.position.copy(basketPos);
+  }
+
+  // Step 3: Start and update the hop out of the basket onto the cloud platform
+  startCloudHop(world) {
+    this.hopData.elapsed = 0;
+    this.hopData.startPos.copy(this.girl.position);
+
+    const firstPlaceholder = CONFIG.cloud.placeholders[0];
+    const cloudTopY = world.cloudCollider.topY;
+
+    this.hopData.endPos.set(
+      firstPlaceholder.x,
+      cloudTopY,
+      CONFIG.cloud.platformCenter.z
+    );
+
+    this.girl.rotation.y = Math.PI * 0.5;
+    this.playAnimation('jump', true);
+  }
+
+  updateCloudHop(dt) {
+    this.hopData.elapsed += dt;
+    const t = Math.min(this.hopData.elapsed / CONFIG.cloud.hopDuration, 1.0);
+
+    // Smooth horizontal and base vertical interpolation
+    this.girl.position.lerpVectors(
+      this.hopData.startPos,
+      this.hopData.endPos,
+      t
+    );
+
+    // Parabolic arc over the basket rim onto the cloud
+    const arc = Math.sin(t * Math.PI) * CONFIG.cloud.hopArcHeight;
+    this.girl.position.y += arc;
+
+    if (t >= 1.0) {
+      this.girl.position.copy(this.hopData.endPos);
+      this.isGrounded = true;
+      this.playAnimation('idle');
+      return true; // Completed hop onto cloud
+    }
+
+    return false;
+  }
+
+  // Step 4: Horizontal-only movement ('a' and 'd') across the cloud platform
+  updateCloudNavigation(dt, keys, world) {
+    if (!this.girl) return;
+
+    let moveX = 0;
+    if (keys.d) moveX += 1;
+    if (keys.a) moveX -= 1;
+
+    if (moveX !== 0) {
+      this.girl.position.x += moveX * CONFIG.player.cloudMoveSpeed * dt;
+      this.girl.position.x = THREE.MathUtils.clamp(
+        this.girl.position.x,
+        CONFIG.cloud.minX,
+        CONFIG.cloud.maxX
+      );
+      this.girl.rotation.y = moveX > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+      this.playAnimation('walk');
+    } else {
+      this.playAnimation('idle');
+    }
+
+    // Lock Y and Z strictly to the cloud platform surface
+    this.girl.position.y = world.cloudCollider.topY;
+    this.girl.position.z = CONFIG.cloud.platformCenter.z;
+  }
+
+  updateMixer(dt) {
+    if (this.mixer) {
+      this.mixer.update(dt);
+    }
   }
 }
