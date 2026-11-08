@@ -9,21 +9,26 @@ export class Entities {
     this.scene = scene;
     this.loader = new GLTFLoader();
 
-    // Girl character state
+    // Girl state
     this.girl = null;
     this.mixer = null;
     this.actions = {};
     this.activeActionName = null;
     this.velocity = new THREE.Vector3();
     this.isGrounded = true;
+    this.currentStoneId = 0;
+    this.walkCycleTime = 0;
+    this.isSittingOnCloud = false;
 
     // Balloon state
     this.balloon = null;
     this.balloonAscentVelocity = 0;
 
-    // Cloud hop interpolation state
+    // Parabolic hop interpolation (for boarding balloon or hopping onto Mr. Cloud)
     this.hopData = {
       elapsed: 0,
+      duration: 0.75,
+      arcHeight: 2.0,
       startPos: new THREE.Vector3(),
       endPos: new THREE.Vector3()
     };
@@ -39,13 +44,20 @@ export class Entities {
         CONFIG.assets.girl,
         (gltf) => {
           this.girl = gltf.scene;
+          this.girl.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+
           const { initialPosition, initialRotationY } = CONFIG.intro;
           this.girl.position.set(
             initialPosition.x,
             initialPosition.y,
             initialPosition.z
           );
-          this.girl.rotation.y = initialRotationY;
+          this.girl.rotation.set(0, initialRotationY, 0);
           this.scene.add(this.girl);
 
           if (gltf.animations && gltf.animations.length > 0) {
@@ -70,6 +82,13 @@ export class Entities {
         CONFIG.assets.balloon,
         (gltf) => {
           this.balloon = gltf.scene;
+          this.balloon.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+
           const { initialPosition } = CONFIG.balloon;
           this.balloon.position.set(
             initialPosition.x,
@@ -90,17 +109,13 @@ export class Entities {
     const keys = Object.keys(this.actions);
     if (keys.length === 0) return;
 
-    const matchKey =
-      keys.find((k) => k.includes(keyword)) || keys[0];
-
+    const matchKey = keys.find((k) => k.includes(keyword)) || keys[0];
     if (this.activeActionName === matchKey) return;
 
     const nextAction = this.actions[matchKey];
     const prevAction = this.actions[this.activeActionName];
 
-    if (prevAction) {
-      prevAction.fadeOut(0.2);
-    }
+    if (prevAction) prevAction.fadeOut(0.2);
 
     nextAction.reset();
     if (loopOnce) {
@@ -113,26 +128,92 @@ export class Entities {
     this.activeActionName = matchKey;
   }
 
-  // Step 1: Update movement & jumping across invisible blocks
-  updateJumpPathMovement(dt, keys, world) {
-    if (!this.girl) return false;
+  setSittingPose(isSitting) {
+    if (!this.girl) return;
+    this.isSittingOnCloud = isSitting;
+    if (isSitting) {
+      // Cozy sitting/riding posture on top of Mr. Cloud
+      this.girl.scale.set(1.0, 0.86, 1.05);
+      this.girl.rotation.z = 0;
+      this.playAnimation('sit');
+    } else {
+      this.girl.scale.set(1.0, 1.0, 1.0);
+      this.girl.rotation.z = 0;
+    }
+  }
 
-    const moveDir = new THREE.Vector3();
-    if (keys.d || keys.arrowRight) moveDir.x += 1;
-    if (keys.a || keys.arrowLeft) moveDir.x -= 1;
-    if (keys.w || keys.arrowUp) moveDir.z -= 1;
-    if (keys.s || keys.arrowDown) moveDir.z += 1;
+  resetToIntro() {
+    if (this.girl) {
+      const { initialPosition, initialRotationY } = CONFIG.intro;
+      this.girl.position.set(
+        initialPosition.x,
+        initialPosition.y,
+        initialPosition.z
+      );
+      this.girl.rotation.set(0, initialRotationY, 0);
+      this.setSittingPose(false);
+    }
+    if (this.balloon) {
+      const { initialPosition } = CONFIG.balloon;
+      this.balloon.position.set(
+        initialPosition.x,
+        initialPosition.y,
+        initialPosition.z
+      );
+    }
+    this.velocity.set(0, 0, 0);
+    this.balloonAscentVelocity = 0;
+    this.isGrounded = true;
+    this.currentStoneId = 0;
+  }
 
-    if (moveDir.lengthSq() > 0) {
-      moveDir.normalize();
-      this.girl.position.x += moveDir.x * CONFIG.player.moveSpeed * dt;
-      this.girl.position.z += moveDir.z * CONFIG.player.moveSpeed * dt;
-      this.girl.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+  // Stage 2 & 3: Walking with A & D, Jumping across the 4 Stone Blocks, and Hopping onto Balloon
+  updateStage2Movement(dt, keys, world) {
+    if (!this.girl) return { boardedBalloon: false, landedStoneId: 0 };
+
+    this.setSittingPose(false);
+
+    let moveX = 0;
+    if (keys.d || keys.arrowRight) moveX += 1;
+    if (keys.a || keys.arrowLeft) moveX -= 1;
+
+    // From the 4th stone block (or close to it), pressing D + Spacebar hops directly onto the Hot Air Balloon
+    if (
+      this.isGrounded &&
+      this.currentStoneId === 4 &&
+      (keys.d || keys.arrowRight) &&
+      keys.space
+    ) {
+      return { triggerBalloonHop: true, landedStoneId: 4 };
+    }
+
+    if (moveX !== 0) {
+      this.girl.position.x += moveX * CONFIG.player.moveSpeed * dt;
+      this.girl.position.x = Math.max(
+        CONFIG.player.minWalkX,
+        this.girl.position.x
+      );
+      this.girl.rotation.y = moveX > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+
+      // Keep Z aligned with the path / stepping stones
+      const targetZ = this.girl.position.x > 1.0 ? -0.15 : 0.0;
+      this.girl.position.z = THREE.MathUtils.lerp(
+        this.girl.position.z,
+        targetZ,
+        6.0 * dt
+      );
 
       if (this.isGrounded) {
+        this.walkCycleTime += dt * 12;
+        this.girl.rotation.z = Math.sin(this.walkCycleTime) * 0.05;
         this.playAnimation('walk');
       }
     } else if (this.isGrounded) {
+      this.girl.rotation.z = THREE.MathUtils.lerp(
+        this.girl.rotation.z,
+        0,
+        10 * dt
+      );
       this.playAnimation('idle');
     }
 
@@ -140,6 +221,8 @@ export class Entities {
     if (keys.space && this.isGrounded) {
       this.velocity.y = CONFIG.player.jumpForce;
       this.isGrounded = false;
+      this.currentStoneId = 0;
+      this.girl.rotation.z = 0;
       this.playAnimation('jump');
     }
 
@@ -148,65 +231,65 @@ export class Entities {
     this.velocity.y += CONFIG.player.gravity * dt;
     this.girl.position.y += this.velocity.y * dt;
 
-    let landed = false;
+    let landedOnStone = false;
 
-    // Collide with invisible blocks on downward motion
+    // Top-surface collision with the 4 stepping stone blocks
     if (this.velocity.y <= 0) {
-      for (const collider of world.invisibleColliders) {
-        const { min, max } = collider.box;
-        const withinXZ =
+      for (const stone of world.stoneColliders) {
+        const { min, max } = stone.box;
+        const withinX =
           this.girl.position.x + CONFIG.player.radius >= min.x &&
-          this.girl.position.x - CONFIG.player.radius <= max.x &&
-          this.girl.position.z + CONFIG.player.radius >= min.z &&
-          this.girl.position.z - CONFIG.player.radius <= max.z;
+          this.girl.position.x - CONFIG.player.radius <= max.x;
 
         if (
-          withinXZ &&
-          prevY >= collider.topY - 0.15 &&
-          this.girl.position.y <= collider.topY
+          withinX &&
+          prevY >= stone.topY - 0.35 &&
+          this.girl.position.y <= stone.topY + 0.08
         ) {
-          this.girl.position.y = collider.topY;
+          this.girl.position.y = stone.topY;
           this.velocity.y = 0;
           this.isGrounded = true;
-          landed = true;
+          this.currentStoneId = stone.id;
+          landedOnStone = true;
           break;
         }
       }
     }
 
-    // Base ground collision & fall reset
-    if (!landed) {
+    // Ground path collision or respawn if fallen
+    if (!landedOnStone) {
       if (
-        this.girl.position.x < 1.2 &&
+        this.girl.position.x <= CONFIG.player.pathEndX + 0.45 &&
         this.girl.position.y <= CONFIG.player.groundY
       ) {
         this.girl.position.y = CONFIG.player.groundY;
         this.velocity.y = 0;
         this.isGrounded = true;
+        this.currentStoneId = 0;
       } else if (this.girl.position.y < CONFIG.player.fallResetY) {
-        // Respawn at start if the player misses an invisible block
-        const { initialPosition } = CONFIG.intro;
-        this.girl.position.set(
-          initialPosition.x,
-          initialPosition.y,
-          initialPosition.z
-        );
+        // Respawn safely right before Stone 1 so the player doesn't lose progress
+        this.girl.position.set(-3.2, CONFIG.player.groundY, 0.0);
         this.velocity.set(0, 0, 0);
         this.isGrounded = true;
+        this.currentStoneId = 0;
       }
     }
 
-    // Check if player reached the balloon basket
+    // Proximity landing in the Hot Air Balloon basket
     if (this.balloon) {
       const basketWorldPos = this.getBasketWorldPosition();
       const distToBasket = this.girl.position.distanceTo(basketWorldPos);
       if (distToBasket <= CONFIG.balloon.entryTriggerRadius) {
         this.enterBalloonBasket();
-        return true; // Reached basket
+        return { boardedBalloon: true, landedStoneId: this.currentStoneId };
       }
     }
 
-    return false;
+    return {
+      boardedBalloon: false,
+      triggerBalloonHop: false,
+      landedStoneId: this.currentStoneId
+    };
   }
 
   getBasketWorldPosition() {
@@ -218,16 +301,49 @@ export class Entities {
     );
   }
 
+  startBalloonHop() {
+    this.hopData.elapsed = 0;
+    this.hopData.duration = CONFIG.balloon.hopDuration;
+    this.hopData.arcHeight = CONFIG.balloon.hopArcHeight;
+    this.hopData.startPos.copy(this.girl.position);
+    this.hopData.endPos.copy(this.getBasketWorldPosition());
+    this.girl.rotation.set(0, Math.PI * 0.5, 0);
+    this.playAnimation('jump', true);
+  }
+
+  updateParabolicHop(dt) {
+    this.hopData.elapsed += dt;
+    const t = Math.min(this.hopData.elapsed / this.hopData.duration, 1.0);
+
+    this.girl.position.lerpVectors(
+      this.hopData.startPos,
+      this.hopData.endPos,
+      t
+    );
+    const arc = Math.sin(t * Math.PI) * this.hopData.arcHeight;
+    this.girl.position.y += arc;
+
+    if (t >= 1.0) {
+      this.girl.position.copy(this.hopData.endPos);
+      this.velocity.set(0, 0, 0);
+      this.isGrounded = true;
+      this.playAnimation('idle');
+      return true;
+    }
+    return false;
+  }
+
   enterBalloonBasket() {
     this.velocity.set(0, 0, 0);
     this.isGrounded = true;
+    this.setSittingPose(false);
     const basketPos = this.getBasketWorldPosition();
     this.girl.position.copy(basketPos);
-    this.girl.rotation.y = Math.PI * 0.5;
+    this.girl.rotation.set(0, 0, 0);
     this.playAnimation('idle');
   }
 
-  // Step 2: Smoothly ascend while Space is held
+  // Stage 3: Smoothly ascend while Spacebar is held
   updateBalloonAscent(dt, keys) {
     if (!this.balloon || !this.girl) return false;
 
@@ -240,12 +356,11 @@ export class Entities {
 
     this.balloon.position.y += this.balloonAscentVelocity * dt;
 
-    // Clamp at target sky altitude
     if (this.balloon.position.y >= CONFIG.balloon.targetSkyY) {
       this.balloon.position.y = CONFIG.balloon.targetSkyY;
       this.balloonAscentVelocity = 0;
       this.syncGirlWithBasket();
-      return true; // Reached target sky height
+      return true;
     }
 
     this.syncGirlWithBasket();
@@ -257,73 +372,71 @@ export class Entities {
     this.girl.position.copy(basketPos);
   }
 
-  // Step 3: Start and update the hop out of the basket onto the cloud platform
+  // Stage 4: Hop from the Hot Air Balloon onto Mr. Cloud
   startCloudHop(world) {
     this.hopData.elapsed = 0;
+    this.hopData.duration = CONFIG.cloud.hopDuration;
+    this.hopData.arcHeight = CONFIG.cloud.hopArcHeight;
     this.hopData.startPos.copy(this.girl.position);
 
-    const firstPlaceholder = CONFIG.cloud.placeholders[0];
-    const cloudTopY = world.cloudCollider.topY;
+    const cloudPos = world.mrCloud
+      ? world.mrCloud.position
+      : CONFIG.cloud.initialPosition;
+    const { riderOffset } = CONFIG.cloud;
 
     this.hopData.endPos.set(
-      firstPlaceholder.x,
-      cloudTopY,
-      CONFIG.cloud.platformCenter.z
+      cloudPos.x + riderOffset.x,
+      cloudPos.y + riderOffset.y,
+      cloudPos.z + riderOffset.z
     );
 
-    this.girl.rotation.y = Math.PI * 0.5;
+    this.girl.rotation.set(0, Math.PI * 0.5, 0);
     this.playAnimation('jump', true);
   }
 
-  updateCloudHop(dt) {
-    this.hopData.elapsed += dt;
-    const t = Math.min(this.hopData.elapsed / CONFIG.cloud.hopDuration, 1.0);
-
-    // Smooth horizontal and base vertical interpolation
-    this.girl.position.lerpVectors(
-      this.hopData.startPos,
-      this.hopData.endPos,
-      t
+  syncGirlOnMrCloud(world) {
+    if (!this.girl || !world.mrCloud) return;
+    const { riderOffset } = CONFIG.cloud;
+    this.girl.position.set(
+      world.mrCloud.position.x + riderOffset.x,
+      world.mrCloud.position.y + riderOffset.y,
+      world.mrCloud.position.z + riderOffset.z
     );
-
-    // Parabolic arc over the basket rim onto the cloud
-    const arc = Math.sin(t * Math.PI) * CONFIG.cloud.hopArcHeight;
-    this.girl.position.y += arc;
-
-    if (t >= 1.0) {
-      this.girl.position.copy(this.hopData.endPos);
-      this.isGrounded = true;
-      this.playAnimation('idle');
-      return true; // Completed hop onto cloud
-    }
-
-    return false;
+    this.setSittingPose(true);
   }
 
-  // Step 4: Horizontal-only movement ('a' and 'd') across the cloud platform
-  updateCloudNavigation(dt, keys, world) {
-    if (!this.girl) return;
+  // Stage 5: Ride Mr. Cloud horizontally across the sky to explore the 4 stations
+  updateCloudNavigation(dt, keys, world, targetAutoX = null) {
+    if (!this.girl || !world.mrCloud) return;
 
     let moveX = 0;
-    if (keys.d) moveX += 1;
-    if (keys.a) moveX -= 1;
+    if (keys.d || keys.arrowRight) moveX += 1;
+    if (keys.a || keys.arrowLeft) moveX -= 1;
 
     if (moveX !== 0) {
-      this.girl.position.x += moveX * CONFIG.player.cloudMoveSpeed * dt;
-      this.girl.position.x = THREE.MathUtils.clamp(
-        this.girl.position.x,
+      world.mrCloud.position.x += moveX * CONFIG.player.cloudMoveSpeed * dt;
+      world.mrCloud.position.x = THREE.MathUtils.clamp(
+        world.mrCloud.position.x,
         CONFIG.cloud.minX,
         CONFIG.cloud.maxX
       );
-      this.girl.rotation.y = moveX > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
-      this.playAnimation('walk');
+      this.girl.rotation.y = moveX > 0 ? Math.PI * 0.25 : -Math.PI * 0.25;
+    } else if (targetAutoX !== null) {
+      world.mrCloud.position.x = THREE.MathUtils.lerp(
+        world.mrCloud.position.x,
+        targetAutoX,
+        5.0 * dt
+      );
+      this.girl.rotation.y = 0;
     } else {
-      this.playAnimation('idle');
+      this.girl.rotation.y = THREE.MathUtils.lerp(
+        this.girl.rotation.y,
+        0,
+        5.0 * dt
+      );
     }
 
-    // Lock Y and Z strictly to the cloud platform surface
-    this.girl.position.y = world.cloudCollider.topY;
-    this.girl.position.z = CONFIG.cloud.platformCenter.z;
+    this.syncGirlOnMrCloud(world);
   }
 
   updateMixer(dt) {
