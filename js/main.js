@@ -23,15 +23,15 @@ class GameFlowController {
     this.dialoguePages = [];
     this.dialogueIndex = 0;
     this.isDialogueOpen = false;
-    this.dialoguePlacement = 'character'; // 'character' (Stage 1 Mia) or 'top' (Mr. Cloud & Sky Stations)
+    this.dialoguePlacement = 'character';
     this.onDialogueFinish = null;
 
-    // Stage 5 sky exploration tracking
+    // Stage 5 sky exploration & Stage 6 Q&A tracking
     this.activeStationId = null;
     this.lastTriggeredStationId = null;
     this.targetCloudAutoX = null;
     this.exploredStationIds = new Set();
-    this.completionShown = false;
+    this.qnaCompleted = false;
 
     this.keys = {
       w: false,
@@ -50,7 +50,7 @@ class GameFlowController {
     this.pointer = new THREE.Vector2();
 
     this.cacheDOMElements();
-    this.styleBottomKeyBar();
+    this.styleDynamicUIElements();
     this.bindUIEvents();
     this.bindInputEvents();
     this.exposeGlobalHandlers();
@@ -76,6 +76,19 @@ class GameFlowController {
     this.dialogueNextBtn = document.querySelector(d.dialogueNextBtn);
     this.dialogueTail = document.querySelector(d.dialogueTail);
 
+    this.qnaModal = document.querySelector(d.qnaModal);
+    this.qnaQuestionText = document.querySelector(d.qnaQuestionText);
+    this.qnaFormGroup = document.querySelector(d.qnaFormGroup);
+    this.qnaInput = document.querySelector(d.qnaInput);
+    this.qnaHint = document.querySelector(d.qnaHint);
+    this.qnaSubmitBtn = document.querySelector(d.qnaSubmitBtn);
+    this.qnaAnswerGroup = document.querySelector(d.qnaAnswerGroup);
+    this.qnaUserResponse = document.querySelector(d.qnaUserResponse);
+    this.qnaRealReason = document.querySelector(d.qnaRealReason);
+    this.qnaFinishBtn = document.querySelector(d.qnaFinishBtn);
+    this.qnaEndGroup = document.querySelector(d.qnaEndGroup);
+    this.qnaReplayBtn = document.querySelector(d.qnaReplayBtn);
+
     this.introControls = document.querySelector(d.introControls);
     this.replayBtn = document.querySelector(d.replayBtn);
     this.skipBtn = document.querySelector(d.skipBtn);
@@ -86,12 +99,44 @@ class GameFlowController {
     this.btnMoveRight = document.querySelector(d.btnMoveRight);
   }
 
-  // Center the bottom mapped controls bar horizontally via JS without touching css/style.css
-  styleBottomKeyBar() {
-    if (!this.bottomKeyControls) return;
-    this.bottomKeyControls.style.left = '50%';
-    this.bottomKeyControls.style.right = 'auto';
-    this.bottomKeyControls.style.transform = 'translateX(-50%)';
+  // Style bottom bar and Q&A modal/input via JS so css/style.css stays 100% untouched
+  styleDynamicUIElements() {
+    if (this.bottomKeyControls) {
+      this.bottomKeyControls.style.left = '50%';
+      this.bottomKeyControls.style.right = 'auto';
+      this.bottomKeyControls.style.transform = 'translateX(-50%)';
+    }
+
+    if (this.qnaModal) {
+      this.qnaModal.style.left = '50%';
+      this.qnaModal.style.top = '50%';
+      this.qnaModal.style.width = 'min(520px, calc(100vw - 48px))';
+      this.qnaModal.style.transform = 'translate(-50%, -50%)';
+      this.qnaModal.style.zIndex = '40';
+    }
+
+    if (this.qnaInput) {
+      this.qnaInput.style.width = '100%';
+      this.qnaInput.style.padding = '12px 16px';
+      this.qnaInput.style.borderRadius = '14px';
+      this.qnaInput.style.border = '2px solid #ffd84d';
+      this.qnaInput.style.backgroundColor = '#ffffff';
+      this.qnaInput.style.fontFamily = 'Quicksand, sans-serif';
+      this.qnaInput.style.fontSize = '0.96rem';
+      this.qnaInput.style.fontWeight = '600';
+      this.qnaInput.style.color = '#23211f';
+      this.qnaInput.style.outline = 'none';
+      // Override global * { user-select: none } in css/style.css so typing & selecting text works smoothly
+      this.qnaInput.style.userSelect = 'text';
+      this.qnaInput.style.webkitUserSelect = 'text';
+    }
+
+    if (this.qnaRealReason) {
+      this.qnaRealReason.style.fontSize = '0.92rem';
+      this.qnaRealReason.style.lineHeight = '1.5';
+      this.qnaRealReason.style.color = '#23211f';
+      this.qnaRealReason.style.marginTop = '4px';
+    }
   }
 
   bindUIEvents() {
@@ -165,8 +210,6 @@ class GameFlowController {
     this.bindHoldableControlButton(this.btnMoveLeft, 'a');
     this.bindHoldableControlButton(this.btnMoveRight, 'd');
     this.bindHoldableControlButton(this.btnJumpHop, 'space', () => {
-      // If the player is on Stone 4 or waiting in the balloon at Mr. Cloud's height,
-      // pressing the middle Jump/Hop button also supplies forward 'd' so single-click Hop works smoothly
       if (
         (this.state === STATES.STAGE_2_WALK_AND_STONES &&
           this.entities.currentStoneId > 0) ||
@@ -191,7 +234,43 @@ class GameFlowController {
       });
     }
 
-    // 6. Clicking 3D Sky Educational Boards directly on canvas
+    // 6. Final Q&A Section Events
+    if (this.qnaSubmitBtn) {
+      this.qnaSubmitBtn.addEventListener('click', (e) => {
+        e.currentTarget.blur();
+        this.submitQnaAnswer();
+      });
+    }
+
+    if (this.qnaInput) {
+      // Stop key events inside the input from bubbling to window movement handlers
+      this.qnaInput.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.submitQnaAnswer();
+        }
+      });
+      this.qnaInput.addEventListener('keyup', (e) => {
+        e.stopPropagation();
+      });
+    }
+
+    if (this.qnaFinishBtn) {
+      this.qnaFinishBtn.addEventListener('click', (e) => {
+        e.currentTarget.blur();
+        this.enterState(STATES.STAGE_7_SITE_OVER);
+      });
+    }
+
+    if (this.qnaReplayBtn) {
+      this.qnaReplayBtn.addEventListener('click', (e) => {
+        e.currentTarget.blur();
+        this.replayExperience();
+      });
+    }
+
+    // 7. Clicking 3D Sky Educational Boards directly on canvas
     if (this.renderer && this.renderer.domElement) {
       this.renderer.domElement.addEventListener('pointerdown', (e) =>
         this.onCanvasPointerDown(e)
@@ -252,30 +331,56 @@ class GameFlowController {
 
   updateBottomControlVisibilityAndLabels() {
     const isIntro = this.state === STATES.STAGE_1_INTRO;
+    const isEnding =
+      this.state === STATES.STAGE_6_FINAL_QNA ||
+      this.state === STATES.STAGE_7_SITE_OVER;
 
-    // Replay & Skip are ONLY shown during the introduction stage
+    // 1. Replay & Skip are ONLY shown during the Stage 1 introduction
     if (this.introControls) {
       this.introControls.classList.toggle('hidden-nav', !isIntro);
     }
 
-    // Mapped movement controls ([← A] [Spacebar] [D →]) are shown in all stages after Intro
+    // 2. Hide bottom movement controls during Intro and during the Final Q&A / Site Over
     if (this.bottomKeyControls) {
-      this.bottomKeyControls.classList.toggle('hidden-nav', isIntro);
+      this.bottomKeyControls.classList.toggle(
+        'hidden-nav',
+        isIntro || isEnding
+      );
     }
 
-    if (!this.btnJumpHop) return;
+    const isInBalloon =
+      this.state === STATES.STAGE_3_BALLOON_BOARDING ||
+      this.state === STATES.STAGE_3_BALLOON_ASCENT ||
+      this.state === STATES.STAGE_4_WAIT_CLOUD_HOP;
 
-    if (this.state === STATES.STAGE_3_BALLOON_ASCENT) {
-      this.btnJumpHop.textContent = 'Hold Spacebar · Ascend ↑';
-    } else if (this.state === STATES.STAGE_4_WAIT_CLOUD_HOP) {
-      this.btnJumpHop.textContent = 'Spacebar + D → · Hop to Mr. Cloud';
-    } else if (
-      this.state === STATES.STAGE_2_WALK_AND_STONES &&
-      this.entities.currentStoneId === 4
-    ) {
-      this.btnJumpHop.textContent = 'Spacebar + D → · Hop to Balloon';
-    } else {
-      this.btnJumpHop.textContent = 'Spacebar · Jump / Hop';
+    const isOnCloud =
+      this.state === STATES.STAGE_4_HOPPING_TO_CLOUD ||
+      this.state === STATES.STAGE_4_CLOUD_GREETING ||
+      this.state === STATES.STAGE_5_SKY_EXPLORATION;
+
+    // Inside the Hot Air Balloon -> hide A & D, show ONLY Spacebar
+    // On Mr. Cloud -> show A & D, hide Spacebar
+    if (this.btnMoveLeft) {
+      this.btnMoveLeft.classList.toggle('hidden-nav', isInBalloon);
+    }
+    if (this.btnMoveRight) {
+      this.btnMoveRight.classList.toggle('hidden-nav', isInBalloon);
+    }
+    if (this.btnJumpHop) {
+      this.btnJumpHop.classList.toggle('hidden-nav', isOnCloud);
+
+      if (this.state === STATES.STAGE_3_BALLOON_ASCENT) {
+        this.btnJumpHop.textContent = 'Hold Spacebar · Ascend ↑';
+      } else if (this.state === STATES.STAGE_4_WAIT_CLOUD_HOP) {
+        this.btnJumpHop.textContent = 'Spacebar · Hop to Mr. Cloud';
+      } else if (
+        this.state === STATES.STAGE_2_WALK_AND_STONES &&
+        this.entities.currentStoneId === 4
+      ) {
+        this.btnJumpHop.textContent = 'Spacebar + D → · Hop to Balloon';
+      } else {
+        this.btnJumpHop.textContent = 'Spacebar · Jump / Hop';
+      }
     }
   }
 
@@ -288,6 +393,7 @@ class GameFlowController {
     window.nextDialogue = () => this.nextDialoguePage();
     window.replayExperience = () => this.replayExperience();
     window.skipIntro = () => this.handleSkip();
+    window.submitQnaAnswer = () => this.submitQnaAnswer();
   }
 
   bindInputEvents() {
@@ -296,16 +402,24 @@ class GameFlowController {
   }
 
   onKeyChange(event, isPressed) {
+    // Allow natural typing (including Spacebar, A, D, and Arrow keys) when inside the Q&A text input
+    const activeEl = document.activeElement;
+    if (
+      activeEl &&
+      (activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable)
+    ) {
+      return;
+    }
+
     const code = event.code;
     const key = event.key.toLowerCase();
 
-    // Prevent Spacebar from re-triggering any focused UI button
+    // Prevent Spacebar from re-triggering any focused UI button during gameplay
     if (code === 'Space' || key === ' ') {
-      if (
-        document.activeElement &&
-        document.activeElement.tagName === 'BUTTON'
-      ) {
-        document.activeElement.blur();
+      if (activeEl && activeEl.tagName === 'BUTTON') {
+        activeEl.blur();
       }
       event.preventDefault();
       this.keys.space = isPressed;
@@ -353,6 +467,79 @@ class GameFlowController {
   }
 
   // =========================================================
+  // FINAL Q&A MODAL LOGIC
+  // =========================================================
+  openQnaModal() {
+    this.closeDialogue(false);
+    if (!this.qnaModal) return;
+
+    if (this.qnaQuestionText) {
+      this.qnaQuestionText.textContent = CONFIG.qna.question;
+    }
+    if (this.qnaInput) {
+      this.qnaInput.value = '';
+      this.qnaInput.placeholder = 'Write your thought or guess here...';
+    }
+    if (this.qnaHint) {
+      this.qnaHint.textContent = 'Write anything to unlock the real reason!';
+    }
+
+    if (this.qnaFormGroup) this.qnaFormGroup.classList.remove('hidden-nav');
+    if (this.qnaAnswerGroup) this.qnaAnswerGroup.classList.add('hidden-nav');
+    if (this.qnaEndGroup) this.qnaEndGroup.classList.add('hidden-nav');
+
+    this.qnaModal.classList.remove('hidden');
+    this.qnaModal.style.transform = 'translate(-50%, -50%)';
+
+    setTimeout(() => {
+      if (this.qnaInput) this.qnaInput.focus();
+    }, 60);
+  }
+
+  hideQnaModal() {
+    if (!this.qnaModal) return;
+    this.qnaModal.classList.add('hidden');
+    if (this.qnaInput) this.qnaInput.blur();
+  }
+
+  submitQnaAnswer() {
+    if (!this.qnaInput) return;
+    const userText = this.qnaInput.value.trim();
+
+    if (!userText) {
+      this.qnaInput.placeholder = 'Please type anything first!';
+      if (this.qnaHint) {
+        this.qnaHint.textContent = 'Type any guess above, then click Submit!';
+      }
+      this.qnaInput.focus();
+      return;
+    }
+
+    this.qnaInput.blur();
+    this.qnaCompleted = true;
+
+    if (this.qnaUserResponse) {
+      this.qnaUserResponse.textContent = `Your answer: "${userText}"`;
+    }
+    if (this.qnaRealReason) {
+      this.qnaRealReason.textContent = CONFIG.qna.realReason;
+    }
+
+    if (this.qnaFormGroup) this.qnaFormGroup.classList.add('hidden-nav');
+    if (this.qnaAnswerGroup) this.qnaAnswerGroup.classList.remove('hidden-nav');
+    if (this.qnaEndGroup) this.qnaEndGroup.classList.add('hidden-nav');
+
+    this.setPromptText('Mystery Solved! Click "Finish Journey" to complete.');
+  }
+
+  showSiteOverView() {
+    if (this.qnaFormGroup) this.qnaFormGroup.classList.add('hidden-nav');
+    if (this.qnaAnswerGroup) this.qnaAnswerGroup.classList.add('hidden-nav');
+    if (this.qnaEndGroup) this.qnaEndGroup.classList.remove('hidden-nav');
+    this.setPromptText('🎉 Journey Complete! Thank you for exploring Mr. Sky!');
+  }
+
+  // =========================================================
   // DIALOGUE PAGINATION SYSTEM (Previous / Next -> Finish)
   // =========================================================
   openDialogue(pages, onFinishCallback = null, placement = 'character') {
@@ -388,13 +575,11 @@ class GameFlowController {
       this.dialogueStep.textContent = `${this.dialogueIndex + 1} / ${total}`;
     }
 
-    // Hide/disable Previous button on first page (index === 0)
     if (this.dialoguePrevBtn) {
       this.dialoguePrevBtn.disabled = isFirst;
       this.dialoguePrevBtn.style.visibility = isFirst ? 'hidden' : 'visible';
     }
 
-    // Change Next button text to "Finish" on final page
     if (this.dialogueNextBtn) {
       this.dialogueNextBtn.textContent = isLast ? 'Finish' : 'Next →';
       this.dialogueNextBtn.dataset.state = isLast ? 'finish' : 'next';
@@ -415,7 +600,6 @@ class GameFlowController {
       this.dialogueIndex += 1;
       this.renderDialoguePage();
     } else {
-      // Final page ("Finish") clicked -> close dialogue & trigger next stage
       this.closeDialogue(true);
     }
   }
@@ -462,9 +646,12 @@ class GameFlowController {
   replayExperience() {
     this.resetKeys();
     this.closeDialogue(false);
+    this.hideQnaModal();
     this.activeStationId = null;
     this.lastTriggeredStationId = null;
     this.targetCloudAutoX = null;
+    this.exploredStationIds.clear();
+    this.qnaCompleted = false;
 
     if (this.world.mrCloud) {
       const { initialPosition } = CONFIG.cloud;
@@ -482,7 +669,6 @@ class GameFlowController {
   handleSkip() {
     this.resetKeys();
     if (this.state === STATES.STAGE_1_INTRO) {
-      // Immediately end intro dialogue, hide Replay/Skip, show bottom mapped controls, and enter Stage 2
       this.closeDialogue(false);
       this.enterState(STATES.STAGE_2_WALK_AND_STONES);
     }
@@ -491,6 +677,7 @@ class GameFlowController {
   jumpToNavStage(stageIdx) {
     this.resetKeys();
     this.closeDialogue(false);
+    this.hideQnaModal();
     this.targetCloudAutoX = null;
 
     if (stageIdx === 0) {
@@ -526,6 +713,8 @@ class GameFlowController {
   selectSkyStation(stationId) {
     const station = this.world.stationBoards.find((s) => s.id === stationId);
     if (!station) return;
+
+    this.hideQnaModal();
 
     if (this.state !== STATES.STAGE_5_SKY_EXPLORATION) {
       if (this.entities.balloon) {
@@ -567,7 +756,7 @@ class GameFlowController {
   }
 
   // =========================================================
-  // 5-STAGE STATE MACHINE
+  // STATE MACHINE
   // =========================================================
   async start() {
     await this.world.init();
@@ -593,13 +782,13 @@ class GameFlowController {
 
     switch (newState) {
       case STATES.STAGE_1_INTRO: {
+        this.hideQnaModal();
         this.updateNavbarUI(0, false);
         this.updatePlaceholderPillsUI(null);
         this.setPromptText('');
         if (this.entities.girl) {
           this.entities.girl.rotation.set(0, CONFIG.intro.initialRotationY, 0);
         }
-        // Stage 1: Dialogue anchored next to Mia
         this.openDialogue(
           CONFIG.intro.dialogue,
           () => {
@@ -611,6 +800,7 @@ class GameFlowController {
       }
 
       case STATES.STAGE_2_WALK_AND_STONES: {
+        this.hideQnaModal();
         this.updateNavbarUI(0, false);
         this.closeDialogue(false);
         this.setPromptText(
@@ -620,6 +810,7 @@ class GameFlowController {
       }
 
       case STATES.STAGE_3_BALLOON_BOARDING: {
+        this.hideQnaModal();
         this.updateNavbarUI(1, false);
         this.setPromptText('Hopping into the Hot Air Balloon...');
         this.entities.startBalloonHop();
@@ -627,6 +818,7 @@ class GameFlowController {
       }
 
       case STATES.STAGE_3_BALLOON_ASCENT: {
+        this.hideQnaModal();
         this.updateNavbarUI(1, false);
         this.closeDialogue(false);
         this.setPromptText(
@@ -636,14 +828,16 @@ class GameFlowController {
       }
 
       case STATES.STAGE_4_WAIT_CLOUD_HOP: {
+        this.hideQnaModal();
         this.updateNavbarUI(1, false);
         this.setPromptText(
-          'Mr. Cloud is here! Press [D →] + [Spacebar] to hop onto Mr. Cloud!'
+          'Mr. Cloud is here! Press [Spacebar] (or [D] + [Spacebar]) to hop onto Mr. Cloud!'
         );
         break;
       }
 
       case STATES.STAGE_4_HOPPING_TO_CLOUD: {
+        this.hideQnaModal();
         this.updateNavbarUI(2, true);
         this.setPromptText('Hopping onto Mr. Cloud...');
         this.entities.startCloudHop(this.world);
@@ -651,24 +845,40 @@ class GameFlowController {
       }
 
       case STATES.STAGE_4_CLOUD_GREETING: {
+        this.hideQnaModal();
         this.updateNavbarUI(2, true);
         this.entities.syncGirlOnMrCloud(this.world);
         this.setPromptText('Mr. Cloud Greeting (Click Next → Finish)');
-        // Stage 4: Mr. Cloud dialogue displayed at the TOP of the screen
         this.openDialogue(
           CONFIG.cloud.greetingDialogue,
           () => {
             this.enterState(STATES.STAGE_5_SKY_EXPLORATION);
           },
-          'top'
+          'top-greeting'
         );
         break;
       }
 
       case STATES.STAGE_5_SKY_EXPLORATION: {
+        this.hideQnaModal();
         this.updateNavbarUI(2, true);
         this.entities.syncGirlOnMrCloud(this.world);
         this.updateExplorationPrompt();
+        break;
+      }
+
+      case STATES.STAGE_6_FINAL_QNA: {
+        this.updateNavbarUI(2, true);
+        this.entities.syncGirlOnMrCloud(this.world);
+        this.setPromptText('Final Sky Q&A — Write your guess below!');
+        this.openQnaModal();
+        break;
+      }
+
+      case STATES.STAGE_7_SITE_OVER: {
+        this.updateNavbarUI(2, true);
+        this.entities.syncGirlOnMrCloud(this.world);
+        this.showSiteOverView();
         break;
       }
     }
@@ -683,16 +893,18 @@ class GameFlowController {
     this.exploredStationIds.add(station.id);
     this.updateExplorationPrompt();
 
-    // Stage 5: Sky Station & Mr. Cloud explanations displayed at the TOP of the screen
     this.openDialogue(
       station.pages,
       () => {
         this.activeStationId = null;
         this.updatePlaceholderPillsUI(null);
 
-        if (this.exploredStationIds.size === 4 && !this.completionShown) {
-          this.completionShown = true;
-          this.openDialogue(CONFIG.cloud.completionDialogue, null, 'top');
+        // Once all 4 sky stations have been explored (or after finishing Station 4), launch the Final Q&A!
+        if (
+          (this.exploredStationIds.size === 4 || station.id === 4) &&
+          !this.qnaCompleted
+        ) {
+          this.enterState(STATES.STAGE_6_FINAL_QNA);
         }
       },
       'top'
@@ -759,7 +971,7 @@ class GameFlowController {
 
       case STATES.STAGE_4_WAIT_CLOUD_HOP: {
         this.entities.syncGirlWithBasket();
-        if ((this.keys.d || this.keys.arrowRight) && this.keys.space) {
+        if (this.keys.space) {
           this.enterState(STATES.STAGE_4_HOPPING_TO_CLOUD);
         }
         break;
@@ -773,7 +985,9 @@ class GameFlowController {
         break;
       }
 
-      case STATES.STAGE_4_CLOUD_GREETING: {
+      case STATES.STAGE_4_CLOUD_GREETING:
+      case STATES.STAGE_6_FINAL_QNA:
+      case STATES.STAGE_7_SITE_OVER: {
         this.entities.syncGirlOnMrCloud(this.world);
         break;
       }
@@ -831,7 +1045,9 @@ class GameFlowController {
     } else if (
       this.state === STATES.STAGE_4_HOPPING_TO_CLOUD ||
       this.state === STATES.STAGE_4_CLOUD_GREETING ||
-      this.state === STATES.STAGE_5_SKY_EXPLORATION
+      this.state === STATES.STAGE_5_SKY_EXPLORATION ||
+      this.state === STATES.STAGE_6_FINAL_QNA ||
+      this.state === STATES.STAGE_7_SITE_OVER
     ) {
       camOffset = CONFIG.camera.cloudOffset;
       lookOffset = CONFIG.camera.cloudLookOffset;
@@ -859,10 +1075,13 @@ class GameFlowController {
   updateSpeechBubblePosition() {
     if (!this.dialogueBox || !this.isDialogueOpen) return;
 
-    // Mr. Cloud & Sky Exploration dialogues stay pinned at the TOP of the screen
-    if (this.dialoguePlacement === 'top') {
+    if (
+      this.dialoguePlacement === 'top-greeting' ||
+      this.dialoguePlacement === 'top'
+    ) {
+      const topPx = this.dialoguePlacement === 'top-greeting' ? 165 : 132;
       this.dialogueBox.style.left = '50%';
-      this.dialogueBox.style.top = '96px';
+      this.dialogueBox.style.top = `${topPx}px`;
       this.dialogueBox.style.width = 'min(480px, 88vw)';
       this.dialogueBox.style.transform = 'translate(-50%, 0)';
       if (this.dialogueTail) {
@@ -871,7 +1090,6 @@ class GameFlowController {
       return;
     }
 
-    // Stage 1 Intro: Anchor speech bubble next to Mia
     if (!this.entities.girl || !this.camera) return;
 
     this.dialogueBox.style.width = '';

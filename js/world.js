@@ -58,7 +58,6 @@ export class World {
       );
       group.name = `SteppingStone_${stoneDef.id}`;
 
-      // Tactile paper-styled stone slab top so all 4 stepping stones are unmistakable
       const bodyGeo = new THREE.BoxGeometry(
         stoneDef.size.x * 0.9,
         stoneDef.size.y,
@@ -130,7 +129,7 @@ export class World {
     });
   }
 
-  // Stage 4 & 5: Build Mr. Cloud (fluffy 3D character that carries Mia across the sky)
+  // Stage 4 & 5: Build Mr. Cloud (the ONLY 3D cloud character in the sky)
   createMrCloud() {
     const cloudGroup = new THREE.Group();
     const { initialPosition } = CONFIG.cloud;
@@ -286,13 +285,11 @@ export class World {
     // Draw scientific diagram per station
     ctx.save();
     if (station.diagramType === 'rainbow') {
-      // Sun -> Prism -> Rainbow Spectrum Waves
       ctx.fillStyle = '#ffd84d';
       ctx.beginPath();
       ctx.arc(105, 225, 48, 0, Math.PI * 2);
       ctx.fill();
 
-      // White beam
       ctx.strokeStyle = '#f4c430';
       ctx.lineWidth = 10;
       ctx.beginPath();
@@ -300,7 +297,6 @@ export class World {
       ctx.lineTo(270, 225);
       ctx.stroke();
 
-      // Prism triangle
       ctx.fillStyle = '#e0f4ff';
       ctx.strokeStyle = '#23211f';
       ctx.lineWidth = 4;
@@ -312,7 +308,6 @@ export class World {
       ctx.fill();
       ctx.stroke();
 
-      // Rainbow waves exiting prism
       const colors = ['#ff4e50', '#ff9f43', '#ffd84d', '#2ecc71', '#3498db', '#8e44ad'];
       colors.forEach((col, i) => {
         ctx.strokeStyle = col;
@@ -333,20 +328,17 @@ export class World {
       ctx.textAlign = 'center';
       ctx.fillText('White Sunlight = All Rainbow Wavelengths (Red = Long, Blue = Short)', 320, 395);
     } else if (station.diagramType === 'atmosphere') {
-      // Earth curve + Atmosphere layer + N2 / O2 gas molecules
       const grad = ctx.createLinearGradient(0, 90, 0, 350);
       grad.addColorStop(0, '#c8ecff');
       grad.addColorStop(1, '#eaf8ff');
       ctx.fillStyle = grad;
       ctx.fillRect(40, 95, 560, 250);
 
-      // Earth arc at bottom
       ctx.fillStyle = '#78c850';
       ctx.beginPath();
       ctx.arc(320, 560, 260, Math.PI * 1.18, Math.PI * 1.82);
       ctx.fill();
 
-      // Floating N2 and O2 molecules
       const mols = [
         [130, 160, 'N₂'], [250, 140, 'O₂'], [380, 165, 'N₂'], [500, 145, 'O₂'],
         [185, 235, 'O₂'], [320, 220, 'N₂'], [445, 240, 'N₂'], [535, 225, 'O₂']
@@ -370,7 +362,6 @@ export class World {
       ctx.textAlign = 'center';
       ctx.fillText('Atmosphere: Billions of Tiny Nitrogen (N₂) & Oxygen (O₂) Molecules', 320, 395);
     } else if (station.diagramType === 'scattering') {
-      // Rayleigh scattering diagram: red passes straight, blue scatters in all directions
       ctx.strokeStyle = '#ff5252';
       ctx.lineWidth = 6;
       ctx.beginPath();
@@ -384,7 +375,6 @@ export class World {
       ctx.font = 'bold 19px Fredoka, sans-serif';
       ctx.fillText('Long Red Wave passes right through →', 70, 118);
 
-      // Incoming short blue wave hitting central gas molecule
       ctx.strokeStyle = '#1e90ff';
       ctx.lineWidth = 6;
       ctx.beginPath();
@@ -395,7 +385,6 @@ export class World {
       }
       ctx.stroke();
 
-      // Central gas molecule
       ctx.fillStyle = '#ffd84d';
       ctx.strokeStyle = '#23211f';
       ctx.lineWidth = 4;
@@ -404,7 +393,6 @@ export class World {
       ctx.fill();
       ctx.stroke();
 
-      // Scattered blue rays in 8 directions
       for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
         ctx.strokeStyle = '#1e90ff';
         ctx.lineWidth = 4;
@@ -419,18 +407,15 @@ export class World {
       ctx.textAlign = 'center';
       ctx.fillText('Rayleigh Scattering: Short Blue Waves Bounce Everywhere!', 320, 395);
     } else {
-      // Blue Sky View: scattered blue light domes down to Mia looking up
       const skyGrad = ctx.createLinearGradient(0, 90, 0, 330);
       skyGrad.addColorStop(0, '#4facfe');
       skyGrad.addColorStop(1, '#bce6ff');
       ctx.fillStyle = skyGrad;
       ctx.fillRect(40, 95, 560, 245);
 
-      // Ground strip
       ctx.fillStyle = '#8fd16a';
       ctx.fillRect(40, 310, 560, 35);
 
-      // Scattered nodes across sky pointing down to observer at (320, 300)
       const nodes = [[140, 145], [250, 130], [390, 130], [500, 145], [200, 200], [440, 200]];
       nodes.forEach(([nx, ny]) => {
         ctx.strokeStyle = '#ffffff';
@@ -448,7 +433,6 @@ export class World {
         ctx.fill();
       });
 
-      // Observer icon
       ctx.fillStyle = '#ff7a59';
       ctx.beginPath();
       ctx.arc(320, 285, 22, 0, Math.PI * 2);
@@ -466,47 +450,77 @@ export class World {
     return texture;
   }
 
+  // Create a flat 2D paper-cutout cloud texture for all non-Mr. Cloud background clouds
+  create2DCloudTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    ctx.clearRect(0, 0, 512, 256);
+
+    const drawCloudShape = (offsetY, fillStyle) => {
+      ctx.fillStyle = fillStyle;
+      ctx.beginPath();
+      ctx.arc(145, 155 + offsetY, 58, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.arc(215, 105 + offsetY, 68, Math.PI * 1.0, Math.PI * 1.85);
+      ctx.arc(310, 112 + offsetY, 62, Math.PI * 1.15, Math.PI * 1.95);
+      ctx.arc(375, 155 + offsetY, 54, Math.PI * 1.5, Math.PI * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    // Soft 2D paper drop-shadow layer
+    drawCloudShape(10, 'rgba(180, 212, 232, 0.55)');
+    // Crisp flat 2D paper-cream cloud body
+    drawCloudShape(0, '#fffdf7');
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  // All other clouds in the sky are flat 2D planes (only Mr. Cloud is 3D)
   createAmbientSkyClouds() {
-    const puffGeo = new THREE.SphereGeometry(1, 16, 14);
-    const puffMat = new THREE.MeshStandardMaterial({
-      color: '#ffffff',
-      roughness: 0.85
+    const cloudTex = this.create2DCloudTexture();
+    const cloudMat = new THREE.MeshBasicMaterial({
+      map: cloudTex,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide
     });
 
+    const planeGeo = new THREE.PlaneGeometry(4.8, 2.4);
+
     const positions = [
-      [3.0, 12.0, -6.0],
-      [11.5, 18.0, -7.5],
-      [15.0, 28.5, -6.5],
-      [21.0, 29.2, -7.0],
-      [27.5, 28.0, -6.0]
+      { pos: [2.5, 11.5, -5.5], scale: 1.0 },
+      { pos: [11.0, 17.5, -6.8], scale: 1.15 },
+      { pos: [8.2, 27.8, -5.8], scale: 0.9 },
+      { pos: [15.2, 28.8, -6.2], scale: 1.1 },
+      { pos: [21.2, 29.4, -6.6], scale: 1.2 },
+      { pos: [27.8, 28.2, -5.8], scale: 1.05 }
     ];
 
-    positions.forEach(([x, y, z], idx) => {
-      const g = new THREE.Group();
-      g.position.set(x, y, z);
-      const m1 = new THREE.Mesh(puffGeo, puffMat);
-      m1.scale.set(1.8, 0.8, 1.1);
-      const m2 = new THREE.Mesh(puffGeo, puffMat);
-      m2.position.set(1.1, -0.1, 0.1);
-      m2.scale.set(1.2, 0.65, 0.9);
-      const m3 = new THREE.Mesh(puffGeo, puffMat);
-      m3.position.set(-1.1, -0.12, 0.1);
-      m3.scale.set(1.2, 0.65, 0.9);
-      g.add(m1, m2, m3);
-      this.scene.add(g);
-      this.ambientClouds.push({ group: g, baseY: y, phase: idx * 1.3 });
+    positions.forEach(({ pos: [x, y, z], scale }, idx) => {
+      const mesh = new THREE.Mesh(planeGeo, cloudMat);
+      mesh.position.set(x, y, z);
+      mesh.scale.set(scale, scale, 1);
+      mesh.name = `Ambient2DCloud_${idx}`;
+      this.scene.add(mesh);
+      this.ambientClouds.push({ group: mesh, baseY: y, phase: idx * 1.3 });
     });
   }
 
   update(elapsedTime) {
-    // Gentle floating motion on sky educational boards and ambient clouds
+    // Gentle floating motion on sky educational boards and 2D ambient clouds
     this.stationBoards.forEach((station, idx) => {
       station.group.position.y =
         station.y + Math.sin(elapsedTime * 2.0 + idx * 0.9) * 0.12;
     });
 
     this.ambientClouds.forEach((c) => {
-      c.group.position.y = c.baseY + Math.sin(elapsedTime * 1.2 + c.phase) * 0.18;
+      c.group.position.y =
+        c.baseY + Math.sin(elapsedTime * 1.2 + c.phase) * 0.14;
     });
   }
 

@@ -8,7 +8,9 @@ export const STATES = {
   STAGE_4_WAIT_CLOUD_HOP: 'STAGE_4_WAIT_CLOUD_HOP',
   STAGE_4_HOPPING_TO_CLOUD: 'STAGE_4_HOPPING_TO_CLOUD',
   STAGE_4_CLOUD_GREETING: 'STAGE_4_CLOUD_GREETING',
-  STAGE_5_SKY_EXPLORATION: 'STAGE_5_SKY_EXPLORATION'
+  STAGE_5_SKY_EXPLORATION: 'STAGE_5_SKY_EXPLORATION',
+  STAGE_6_FINAL_QNA: 'STAGE_6_FINAL_QNA',
+  STAGE_7_SITE_OVER: 'STAGE_7_SITE_OVER'
 };
 
 export const CONFIG = {
@@ -26,7 +28,7 @@ export const CONFIG = {
     dialogue: [
       {
         speaker: 'Mia',
-        text: "Hi there! I'm Mia! Welcome to our little paper sky world."
+        text: "Hi there! I'm Mia! Welcome to our little blue world."
       },
       {
         speaker: 'Mia',
@@ -34,7 +36,7 @@ export const CONFIG = {
       },
       {
         speaker: 'Mia',
-        text: "Let's walk down the path, hop across the 4 stepping stones to the Hot Air Balloon, and ask Mr. Cloud high up in the sky!"
+        text: "If you also have the same curiosity then let's walk down the path, and ask Mr. Cloud high up in the sky!"
       }
     ]
   },
@@ -105,26 +107,15 @@ export const CONFIG = {
     greetingDialogue: [
       {
         speaker: 'Mr. Cloud',
-        text: 'Hello Mia! Welcome up to the troposphere! Hop on and make yourself comfy!'
+        text: 'Hello Mia! Welcome up to the troposphere!'
       },
       {
         speaker: 'Mr. Cloud',
-        text: "You wanted to know why the sky is blue, right? I've set up 4 illustrated sky stations ahead of us!"
+        text: "You wanted to know why the sky is blue, right? Let's walk through the sky to understand it better!"
       },
       {
         speaker: 'Mr. Cloud',
-        text: 'Use ← A and D → to glide with me across the sky—or click any of the 4 sky boards to inspect the science!'
-      }
-    ],
-
-    completionDialogue: [
-      {
-        speaker: 'Mr. Cloud',
-        text: 'Hooray! We explored all 4 sky stations together! Now you know how Rayleigh scattering of short blue wavelengths paints our sky blue!'
-      },
-      {
-        speaker: 'Mia',
-        text: 'Thank you, Mr. Cloud! We can keep gliding around the sky with ← A and D → or click any of the 4 stations above to review!'
+        text: 'Use ← A and D → to glide with me across the sky or click any of the 4 sky boards to inspect!'
       }
     ],
 
@@ -162,11 +153,11 @@ export const CONFIG = {
         pages: [
           {
             speaker: 'Mr. Cloud · Station 2',
-            text: 'When sunlight reaches Earth, it enters our atmosphere—a protective blanket filled with tiny gas molecules (mostly nitrogen and oxygen).'
+            text: 'When sunlight reaches Earth, it enters our atmosphere which is a protective blanket filled with tiny gas molecules (mostly nitrogen and oxygen).'
           },
           {
             speaker: 'Mr. Cloud · Station 2',
-            text: 'These gas molecules are thousands of times smaller than a grain of sand—much smaller than the wavelengths of visible light!'
+            text: 'These gas molecules are thousands of times smaller than a grain of sand and the wavelengths of visible light!'
           }
         ]
       },
@@ -206,11 +197,19 @@ export const CONFIG = {
           },
           {
             speaker: 'Mr. Cloud · Station 4',
-            text: 'Violet light scatters even more, but the sun emits much more blue light and human eyes are far more sensitive to blue—giving us our bright blue sky!'
+            text: 'Which is why the sky is blue but wait wait wait....Mia has one last big question for you! Click Finish to open the Final Sky Q&A!'
           }
         ]
       }
     ]
+  },
+
+  // Final Q&A Section after all 4 placeholders are explored
+  qna: {
+    question:
+      'The colour violet also has a short wavelength, then why is the sky not violet (why is the sky blue instead)?',
+    realReason:
+      'Here is the real reason: Even though violet light has an even shorter wavelength and scatters more than blue light, (1) the Sun naturally emits much more blue light than violet light, and (2) human eyes have color receptors (cone cells) that are far more sensitive to blue than violet, so our eyes and brain perceive the sky as bright blue!'
   },
 
   camera: {
@@ -250,6 +249,18 @@ export const CONFIG = {
     dialoguePrevBtn: '#dialogue-prev-btn',
     dialogueNextBtn: '#dialogue-next-btn',
     dialogueTail: '#dialogue-tail',
+    qnaModal: '#qna-modal',
+    qnaQuestionText: '#qna-question-text',
+    qnaFormGroup: '#qna-form-group',
+    qnaInput: '#qna-input',
+    qnaHint: '#qna-hint',
+    qnaSubmitBtn: '#qna-submit-btn',
+    qnaAnswerGroup: '#qna-answer-group',
+    qnaUserResponse: '#qna-user-response',
+    qnaRealReason: '#qna-real-reason',
+    qnaFinishBtn: '#qna-finish-btn',
+    qnaEndGroup: '#qna-end-group',
+    qnaReplayBtn: '#qna-replay-btn',
     introControls: '#intro-controls',
     replayBtn: '#replay-btn',
     skipBtn: '#skip-btn',

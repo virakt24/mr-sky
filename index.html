@@ -162,6 +162,67 @@
     <div id="dialogue-tail" class="speech-tail" aria-hidden="true"></div>
   </div>
 
+  <!-- FINAL Q&A SECTION (Appears after all 4 Sky Placeholders are explored) -->
+  <section id="qna-modal" class="controls-modal hidden" role="dialog" aria-labelledby="qna-title" aria-modal="true">
+    <div class="controls-card paper-surface">
+      <div class="controls-header">
+        <h2 id="qna-title">Final Sky Q&amp;A</h2>
+      </div>
+      <p id="qna-question-text" class="speech-text">
+        The colour violet also has a short wavelength—then why is the sky not violet instead of blue?
+      </p>
+
+      <!-- Input Form (Shown before user submits an answer) -->
+      <div id="qna-form-group" class="controls-grid">
+        <input
+          id="qna-input"
+          type="text"
+          placeholder="Write your thought or guess here..."
+          autocomplete="off"
+          aria-label="Your answer"
+        />
+        <div class="speech-footer">
+          <span id="qna-hint" class="step-counter">Write anything to unlock the answer!</span>
+          <button id="qna-submit-btn" class="dialogue-nav-btn next-btn" type="button">
+            Submit Answer →
+          </button>
+        </div>
+      </div>
+
+      <!-- Answer & Site Completion View (Shown after user writes anything & submits) -->
+      <div id="qna-answer-group" class="controls-grid hidden-nav">
+        <div class="control-item">
+          <div class="control-desc">
+            <strong id="qna-user-response">Your thought:</strong>
+            <span id="qna-real-reason"></span>
+          </div>
+        </div>
+        <div class="speech-footer">
+          <span class="step-counter">🎉 You completed Mr. Sky!</span>
+          <button id="qna-finish-btn" class="utility-pill-btn skip-btn" type="button">
+            Finish Journey ✓
+          </button>
+        </div>
+      </div>
+
+      <!-- Final End Banner (Shown when Finish Journey is clicked) -->
+      <div id="qna-end-group" class="controls-grid hidden-nav">
+        <div class="control-item">
+          <div class="control-desc">
+            <strong>Thank You for Exploring Mr. Sky! 🌤️</strong>
+            <span>You helped Mia and Mr. Cloud uncover the complete science of why our sky is blue.</span>
+          </div>
+        </div>
+        <div class="speech-footer">
+          <span class="step-counter">The End</span>
+          <button id="qna-replay-btn" class="utility-pill-btn replay-btn" type="button">
+            ↻ Replay From Start
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- INTRO-ONLY BOTTOM-RIGHT CONTROLS: REPLAY & SKIP (Hidden after Intro) -->
   <div id="intro-controls" class="bottom-right-controls" aria-label="Intro Dialogue Controls">
     <button id="replay-btn" class="utility-pill-btn replay-btn" type="button">
