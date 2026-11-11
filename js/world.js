@@ -8,6 +8,7 @@ export class World {
   constructor(scene) {
     this.scene = scene;
     this.loader = new GLTFLoader();
+    this.textureLoader = new THREE.TextureLoader();
 
     this.stoneColliders = [];
     this.mrCloud = null;
@@ -225,24 +226,43 @@ export class World {
       rimMesh.userData = { stationId: station.id };
       group.add(rimMesh);
 
-      // Illustrated scientific canvas texture on the front
-      const tex = this.createStationIllustrationTexture(station, false);
+      // Default fallback texture until custom picture loads
+      const fallbackTex = this.createStationIllustrationTexture(station, false);
       const artGeo = new THREE.PlaneGeometry(3.26, 2.32);
-      const artMat = new THREE.MeshBasicMaterial({ map: tex });
+      const artMat = new THREE.MeshBasicMaterial({ map: fallbackTex });
       const artMesh = new THREE.Mesh(artGeo, artMat);
       artMesh.position.z = 0.09;
       artMesh.userData = { stationId: station.id };
       group.add(artMesh);
 
-      this.scene.add(group);
-
-      this.stationBoards.push({
+      const boardRecord = {
         ...station,
         group,
         rimMat,
         artMat,
+        customTexture: null,
         visited: false
-      });
+      };
+
+      // Load your custom image if specified in CONFIG.cloud.stations
+      if (station.image) {
+        this.textureLoader.load(
+          station.image,
+          (loadedTex) => {
+            loadedTex.colorSpace = THREE.SRGBColorSpace;
+            boardRecord.customTexture = loadedTex;
+            artMat.map = loadedTex;
+            artMat.needsUpdate = true;
+          },
+          undefined,
+          () => {
+            // Keeps fallback canvas illustration if custom image file is missing
+          }
+        );
+      }
+
+      this.scene.add(group);
+      this.stationBoards.push(boardRecord);
     });
   }
 
@@ -250,6 +270,14 @@ export class World {
     const item = this.stationBoards.find((s) => s.id === stationId);
     if (!item || item.visited) return;
     item.visited = true;
+
+    // Keep your custom picture on the board if one was loaded
+    if (item.customTexture) {
+      item.artMat.map = item.customTexture;
+      item.artMat.needsUpdate = true;
+      return;
+    }
+
     const updatedTex = this.createStationIllustrationTexture(item, true);
     item.artMat.map = updatedTex;
     item.artMat.needsUpdate = true;

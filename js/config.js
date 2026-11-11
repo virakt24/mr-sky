@@ -129,6 +129,7 @@ export const CONFIG = {
         shortLabel: '1. Sunlight Colors',
         title: '1. Sunlight Contains All Colors',
         accent: '#ffd84d',
+        image: './slide1.png', // <-- Put your 1st custom picture path here
         diagramType: 'rainbow',
         pages: [
           {
@@ -149,6 +150,7 @@ export const CONFIG = {
         shortLabel: '2. Atmosphere',
         title: "2. Earth's Blanket of Gases",
         accent: '#a8e6cf',
+        image: './slide2.png', // <-- Put your 2nd custom picture path here
         diagramType: 'atmosphere',
         pages: [
           {
@@ -169,6 +171,7 @@ export const CONFIG = {
         shortLabel: '3. Blue Scattering',
         title: '3. Rayleigh Scattering',
         accent: '#7fd1f7',
+        image: './slide3.png', // <-- Put your 3rd custom picture path here
         diagramType: 'scattering',
         pages: [
           {
@@ -189,6 +192,7 @@ export const CONFIG = {
         shortLabel: '4. Blue Sky View',
         title: '4. Why We See a Blue Sky',
         accent: '#ff7a59',
+        image: './slide4.png', // <-- Put your 4th custom picture path here
         diagramType: 'eyes',
         pages: [
           {
